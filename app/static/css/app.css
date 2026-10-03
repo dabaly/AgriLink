@@ -1,0 +1,4 @@
+:root { color-scheme: light; }
+body { min-height: 100vh; display: flex; flex-direction: column; background: #fbfcfa; }
+main { flex: 1; }
+.hero { background: linear-gradient(135deg, #f0f7ed, #fff); border: 1px solid #e4eee0; }
