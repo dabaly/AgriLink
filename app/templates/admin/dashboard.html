@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Admin operations · AgriLink{% endblock %}
+{% block content %}
+<h1 class="h2 mb-4">Admin operations</h1>
+<div class="row g-3">
+  {% for label, key in [('Active users','active_users'),('Verified users','verified_users'),('Active listings','active_listings'),('Flagged listings','flagged_listings'),('Open disputes','open_disputes'),('Disputes under review','disputes_under_review'),('Pending orders','pending_orders')] %}
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">{{ label }}</div><div class="display-6">{{ counts[key] }}</div></div></div></div>
+  {% endfor %}
+</div>
+<div class="mt-4 d-flex flex-wrap gap-3"><a href="{{ url_for('admin.users') }}">Users</a><a href="{{ url_for('admin.listings') }}">Listings</a><a href="{{ url_for('disputes.admin_list') }}">Disputes</a><a href="{{ url_for('admin.audit') }}">Audit log</a></div>
+{% endblock %}

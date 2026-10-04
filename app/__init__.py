@@ -83,6 +83,9 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
     app.register_blueprint(reviews_bp)
     app.register_blueprint(disputes_bp)
     app.register_blueprint(notifications_bp)
+    from app.admin_ops import admin_bp
+
+    app.register_blueprint(admin_bp)
     from app.utils.datetime import format_nairobi_datetime
 
     app.add_template_filter(format_kes, "kes")

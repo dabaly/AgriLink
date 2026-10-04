@@ -1,0 +1,1 @@
+"""Shared audit record service."""

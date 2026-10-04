@@ -167,6 +167,8 @@ class Order(db.Model):
     item: Mapped[OrderItem] = relationship(
         back_populates="order", uselist=False, cascade="all, delete-orphan"
     )
+    buyer: Mapped[User] = relationship(foreign_keys=[buyer_id])
+    seller: Mapped[User] = relationship(foreign_keys=[seller_id])
     history: Mapped[list[OrderStatusHistory]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
     )

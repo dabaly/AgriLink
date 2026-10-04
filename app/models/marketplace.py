@@ -73,9 +73,7 @@ class Category(db.Model):
 class Listing(db.Model):
     __tablename__ = "listings"
     __table_args__ = (
-        CheckConstraint(
-            "length(title) BETWEEN 3 AND 120", name="ck_listings_title_length"
-        ),
+        CheckConstraint("length(title) BETWEEN 3 AND 120", name="ck_listings_title_length"),
         CheckConstraint(
             "length(trim(description)) BETWEEN 1 AND 5000",
             name="ck_listings_description_length",

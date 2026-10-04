@@ -6,6 +6,7 @@ from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from werkzeug.exceptions import Conflict, NotFound
 
+from app.auth.decorators import admin_required
 from app.disputes import disputes_bp
 from app.disputes.forms import DisputeForm, DisputeResolutionForm
 from app.disputes.services import DisputeService, DisputeValidationError
@@ -42,11 +43,13 @@ def participant_detail(dispute_id: int):
 
 
 @disputes_bp.get("/admin/disputes")
-@login_required
+@admin_required
 def admin_list():
     try:
         pagination = DisputeService.list_for_admin(
-            current_user, page=request.args.get("page", 1, type=int)
+            current_user,
+            page=request.args.get("page", 1, type=int) or 1,
+            status=request.args.get("status", ""),
         )
     except NotFound:
         abort(404)
@@ -54,7 +57,7 @@ def admin_list():
 
 
 @disputes_bp.get("/admin/disputes/<int:dispute_id>")
-@login_required
+@admin_required
 def admin_detail(dispute_id: int):
     try:
         dispute = DisputeService.get_for_admin(current_user, dispute_id)
@@ -66,7 +69,7 @@ def admin_detail(dispute_id: int):
 
 
 @disputes_bp.post("/admin/disputes/<int:dispute_id>/actions/<action>")
-@login_required
+@admin_required
 def admin_action(dispute_id: int, action: str):
     form = DisputeResolutionForm()
     if action in {"resolve_for_buyer", "resolve_for_seller"} and not form.validate_on_submit():

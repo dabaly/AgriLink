@@ -68,8 +68,10 @@ def seed_categories() -> int:
 
 def parse_kes_to_minor(value: str) -> int:
     """Convert a strict decimal KES input to integer minor units."""
-    if not isinstance(value, str) or len(value) > 18 or not re.fullmatch(
-        r"(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?", value.strip()
+    if (
+        not isinstance(value, str)
+        or len(value) > 18
+        or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?", value.strip())
     ):
         raise MarketplaceValidationError("Enter a valid KES amount with up to two decimals.")
     try:
@@ -129,11 +131,7 @@ def _validate_listing_values(data: dict, *, creating: bool) -> dict:
     if isinstance(quantity_raw, bool):
         raise MarketplaceValidationError("Quantity must be a whole number greater than zero.")
     quantity_text = str(quantity_raw).strip()
-    if (
-        len(quantity_text) > 10
-        or not quantity_text.isascii()
-        or not quantity_text.isdecimal()
-    ):
+    if len(quantity_text) > 10 or not quantity_text.isascii() or not quantity_text.isdecimal():
         raise MarketplaceValidationError("Quantity must be a whole number greater than zero.")
     quantity = int(quantity_text)
     if quantity < 1 or quantity > 2_147_483_647:
@@ -555,6 +553,18 @@ def get_listing_image_for_view(listing_id: int, image_id: int, actor=None) -> Li
     except NotFound:
         if actor is None or not getattr(actor, "is_authenticated", False):
             raise
+        if getattr(actor, "role", None) == "ADMIN":
+            from app.admin_ops.services import require_admin
+
+            require_admin(actor)
+            image = db.session.scalar(
+                select(ListingImage).where(
+                    ListingImage.id == image_id, ListingImage.listing_id == listing_id
+                )
+            )
+            if image is None:
+                raise NotFound() from None
+            return image
         listing = _owned_listing(actor, listing_id)
         image = db.session.scalar(
             select(ListingImage).where(

@@ -36,13 +36,17 @@ def _verified_participant(actor: User) -> None:
 
 
 def _admin(actor: User) -> None:
-    if (
-        not actor
-        or not actor.is_authenticated
-        or actor.phone_verified_at is None
-        or actor.role != "ADMIN"
-    ):
-        raise NotFound()
+    from app.admin_ops.services import require_admin
+
+    require_admin(actor)
+
+
+def _audit_dispute(actor: User, action: str, dispute_id: int, metadata=None) -> None:
+    from app.audit.services import AuditService
+
+    AuditService.append(
+        actor=actor, action=action, target_type="dispute", target_id=dispute_id, metadata=metadata
+    )
 
 
 def _user_rate_limit(actor: User):
@@ -151,14 +155,19 @@ def get_for_participant(actor: User, dispute_id: int) -> Dispute:
     return dispute
 
 
-def list_for_admin(actor: User, *, page: int = 1, per_page: int = 20):
+def list_for_admin(actor: User, *, page: int = 1, per_page: int = 20, status: str = ""):
     _admin(actor)
     stmt = (
         select(Dispute)
-        .where(Dispute.status.in_([DisputeStatus.OPEN.value, DisputeStatus.UNDER_REVIEW.value]))
         .options(joinedload(Dispute.order))
         .order_by(Dispute.opened_at.asc(), Dispute.id.asc())
     )
+    if status in {value.value for value in DisputeStatus}:
+        stmt = stmt.where(Dispute.status == status)
+    else:
+        stmt = stmt.where(
+            Dispute.status.in_([DisputeStatus.OPEN.value, DisputeStatus.UNDER_REVIEW.value])
+        )
     return db.paginate(stmt, page=max(page, 1), per_page=min(max(per_page, 1), 50), error_out=False)
 
 
@@ -216,6 +225,7 @@ def admin_transition(actor: User, dispute_id: int, action: str, note: str = "") 
                 note=clean_note or None,
             )
         )
+        _audit_dispute(actor, "DISPUTE_MOVED_TO_REVIEW", dispute.id)
         from app.models import NotificationType
         from app.notifications.services import NotificationService
 
@@ -262,6 +272,7 @@ def admin_transition(actor: User, dispute_id: int, action: str, note: str = "") 
                 note=clean_note,
             )
         )
+        _audit_dispute(actor, "DISPUTE_RESOLVED_FOR_SELLER", dispute.id)
         from app.models import NotificationType
         from app.notifications.services import NotificationService
 
@@ -385,6 +396,8 @@ def _finalize_buyer_resolution(order_id: int) -> None:
             note=dispute.resolution_note,
         )
     )
+    actor = db.session.get(User, dispute.resolution_requested_by)
+    _audit_dispute(actor, "DISPUTE_RESOLVED_FOR_BUYER", dispute.id)
     db.session.flush()
 
 
