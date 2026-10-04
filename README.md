@@ -55,6 +55,18 @@ Accepting another participant's unexpired offer atomically changes the offer to 
 
 The schema adds `conversations`, `messages`, `offers`, `orders`, `order_items`, and `order_status_history`. Conversations are unique per listing and buyer; messages and offers are retained as history. A partial unique index permits only one pending offer per conversation, and each confirmed order references its accepted offer uniquely. No phone numbers, email addresses, private profile fields, or filesystem details are included in chat payloads.
 
+## Orders, inventory, and fulfillment
+
+Buyers can view their orders at `/my/orders`; farmers can manage sales at `/my/sales`. Both roles can open only orders where they are the recorded buyer or seller. Order pages show the accepted-offer snapshot, total in integer KES minor units, private order history, and available actions. Every successful order state change and the initial `CONFIRMED` state creates a status history row.
+
+An accepted offer atomically reduces `Listing.quantity`; that field continues to mean stock available for new offers. The `OrderItem` snapshot holds the quantity reserved by the order, so fulfillment never decrements listing stock a second time. Cancelling a `CONFIRMED` order before handoff atomically releases its reserved quantity. A `left_seller_at` timestamp records when delivery enters transit or a pickup is handed over; after that point a normal cancellation is rejected and no stock is restored.
+
+The buyer chooses `PICKUP` or `DELIVERY` while an order is `CONFIRMED`. Pickup needs no destination address. Delivery requires a Kenyan county, area, directions, and recipient name and phone. These details are visible only to that order's buyer and seller. Once fulfillment starts, the method is locked. The seller can progress paid orders through preparation and the method-specific path: pickup goes through `READY_FOR_PICKUP`; delivery goes through `IN_TRANSIT`; both reach `DELIVERED` before buyer completion.
+
+The lifecycle supports `PENDING`, `CONFIRMED`, `PAID`, `PROCESSING`, `READY_FOR_PICKUP`, `IN_TRANSIT`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `DISPUTED`. OrderService owns all transitions. This release has no PaymentService or payment provider, so orders remain `CONFIRMED` until a future trusted payment integration records payment; neither buyer nor seller can mark an order paid, and fulfillment cannot proceed before then. No payment success, charge, or refund is simulated. Delivered orders can be completed by the buyer or automatically after 72 hours using `flask --app wsgi.py jobs complete-orders`; `jobs run-maintenance` also runs that completion task with offer expiry.
+
+The Batch 5 migration adds delivery instructions and physical handoff/completion timestamps, expands the order state constraints, and makes system-generated status history entries possible with a null actor. No payment provider, refund workflow, disputes UI, or background worker is included.
+
 Run authentication, marketplace, chat, and offer tests with `pytest`. No real SMS provider is needed for local development or testing.
 
 ## Commands

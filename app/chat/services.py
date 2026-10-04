@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from flask import has_request_context
-from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import Conflict, NotFound
 
@@ -13,7 +13,8 @@ from app.extensions import db, limiter
 from app.marketplace.services import get_public_listing
 from app.models import Listing, User
 from app.models.marketplace import ListingStatus, ModerationStatus
-from app.models.trading import Conversation, Message, Offer, Order, OrderItem, OrderStatusHistory
+from app.models.trading import Conversation, Message, Offer
+from app.orders.services import OrderService
 
 OFFER_TTL = timedelta(hours=48)
 MAX_TOTAL_MINOR = 2_147_483_647
@@ -339,9 +340,6 @@ def transition_offer(
         return offer, new_offer
     if action != "accept":
         raise ChatValidationError("Choose a supported offer action.")
-    listing = db.session.get(Listing, conv.listing_id)
-    if not listing or offer.quantity > listing.quantity or offer.unit != listing.unit:
-        raise Conflict("The listing no longer has enough available quantity.")
     # Claim the one pending offer and reserve its stock in the same transaction.
     claimed = db.session.execute(
         update(Offer)
@@ -358,54 +356,15 @@ def transition_offer(
     if not claimed.rowcount:
         db.session.rollback()
         raise Conflict("This offer is no longer pending.")
-    stock = db.session.execute(
-        update(Listing)
-        .where(
-            Listing.id == listing.id,
-            Listing.status == ListingStatus.AVAILABLE.value,
-            Listing.moderation_status == ModerationStatus.APPROVED.value,
-            Listing.quantity >= offer.quantity,
-            Listing.category.has(active=True),
-            Listing.seller.has(
-                and_(
-                    User.role == "FARMER",
-                    User.is_active.is_(True),
-                    User.is_suspended.is_(False),
-                    User.phone_verified_at.is_not(None),
-                )
-            ),
+    db.session.refresh(offer)
+    listing = db.session.get(Listing, conv.listing_id)
+    try:
+        order = OrderService.create_confirmed_from_offer(
+            actor=actor, conversation=conv, offer=offer, listing=listing
         )
-        .values(
-            quantity=Listing.quantity - offer.quantity,
-            status=case(
-                (Listing.quantity == offer.quantity, ListingStatus.SOLD.value), else_=Listing.status
-            ),
-            updated_at=now,
-        )
-    )
-    if not stock.rowcount:
+    except Exception:
         db.session.rollback()
-        raise Conflict("The listing is no longer available in that quantity.")
-    seller_id = listing.seller_id
-    buyer_id = conv.buyer_id
-    order = Order(
-        accepted_offer_id=offer.id,
-        listing_id=listing.id,
-        buyer_id=buyer_id,
-        seller_id=seller_id,
-        status="CONFIRMED",
-        total_minor=offer.total_minor,
-    )
-    order.item = OrderItem(
-        listing_id=listing.id,
-        title_snapshot=listing.title,
-        quantity=offer.quantity,
-        unit=offer.unit,
-        unit_price_minor=offer.unit_price_minor,
-        total_minor=offer.total_minor,
-    )
-    order.history.append(OrderStatusHistory(status="CONFIRMED", actor_id=actor.id))
-    db.session.add(order)
+        raise
     db.session.execute(
         update(Offer)
         .where(Offer.conversation_id == conv.id, Offer.id != offer.id, Offer.status == "PENDING")

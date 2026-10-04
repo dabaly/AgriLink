@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ 'My orders' if view == 'buyer' else 'Sales orders' }} · AgriLink{% endblock %}
+{% block content %}
+<p class="small text-success fw-semibold mb-1">ORDER MANAGEMENT</p>
+<h1 class="h2 mb-4">{{ 'My orders' if view == 'buyer' else 'Sales orders' }}</h1>
+<form method="get" class="row g-2 align-items-end mb-4"><div class="col-sm-4"><label class="form-label" for="status">Filter by status</label><select class="form-select" id="status" name="status"><option value="">All statuses</option>{% for state in ['PENDING','CONFIRMED','PAID','PROCESSING','READY_FOR_PICKUP','IN_TRANSIT','DELIVERED','COMPLETED','CANCELLED','DISPUTED'] %}<option value="{{ state }}" {{ 'selected' if status == state else '' }}>{{ state.replace('_', ' ')|title }}</option>{% endfor %}</select></div><div class="col-auto"><button class="btn btn-outline-success">Apply</button></div></form>
+{% if pagination.items %}<div class="list-group shadow-sm">{% for order in pagination.items %}<a href="{{ url_for('orders.detail', order_id=order.id) }}" class="list-group-item list-group-item-action p-3"><div class="d-flex justify-content-between align-items-start"><div><span class="fw-semibold">Order #{{ order.id }} · {{ order.item.title_snapshot }}</span><div class="small text-muted mt-1">{{ order.item.quantity }} {{ order.item.unit|lower }} · {{ order.total_minor|kes }} · {{ order.created_at.strftime('%d %b %Y') }}</div></div><span class="badge text-bg-{{ 'success' if order.status == 'COMPLETED' else 'secondary' }}">{{ order.status.replace('_', ' ')|title }}</span></div></a>{% endfor %}</div>
+{% else %}<div class="card border-0 bg-light"><div class="card-body p-4"><h2 class="h5">No orders to show</h2><p class="mb-0">Confirmed offer orders will appear here.</p></div></div>{% endif %}
+{% if pagination.pages > 1 %}<nav class="mt-4"><ul class="pagination">{% for n in range(1, pagination.pages + 1) %}<li class="page-item {{ 'active' if n == pagination.page else '' }}"><a class="page-link" href="{{ url_for(request.endpoint, page=n, status=status) }}">{{ n }}</a></li>{% endfor %}</ul></nav>{% endif %}
+{% endblock %}

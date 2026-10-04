@@ -70,8 +70,10 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
     app.register_blueprint(account_bp)
     app.register_blueprint(marketplace_bp)
     from app.chat import chat_bp
+    from app.orders.routes import orders_bp
 
     app.register_blueprint(chat_bp)
+    app.register_blueprint(orders_bp)
     app.add_template_filter(format_kes, "kes")
     app.add_template_global(_seller_name, "seller_display_name")
     app.extensions["agri_link.otp_provider"] = get_otp_provider(app)

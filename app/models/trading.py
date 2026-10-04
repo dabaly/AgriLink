@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -129,7 +130,11 @@ class Offer(db.Model):
 class Order(db.Model):
     __tablename__ = "orders"
     __table_args__ = (
-        CheckConstraint("status IN ('CONFIRMED','CANCELLED','COMPLETED')", name="ck_orders_status"),
+        CheckConstraint(
+            "status IN ('PENDING','CONFIRMED','PAID','PROCESSING','READY_FOR_PICKUP',"
+            "'IN_TRANSIT','DELIVERED','COMPLETED','CANCELLED','DISPUTED')",
+            name="ck_orders_status",
+        ),
         CheckConstraint("total_minor > 0", name="ck_orders_total_positive"),
     )
 
@@ -146,8 +151,12 @@ class Order(db.Model):
     seller_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    status: Mapped[str] = mapped_column(String(12), default="CONFIRMED", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="CONFIRMED", nullable=False)
     total_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    left_seller_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -160,6 +169,9 @@ class Order(db.Model):
     )
     history: Mapped[list[OrderStatusHistory]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
+    )
+    delivery: Mapped[Delivery | None] = relationship(
+        back_populates="order", uselist=False, cascade="all, delete-orphan"
     )
 
 
@@ -194,15 +206,74 @@ class OrderItem(db.Model):
 
 class OrderStatusHistory(db.Model):
     __tablename__ = "order_status_history"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING','CONFIRMED','PAID','PROCESSING','READY_FOR_PICKUP',"
+            "'IN_TRANSIT','DELIVERED','COMPLETED','CANCELLED','DISPUTED')",
+            name="ck_order_status_history_status",
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    status: Mapped[str] = mapped_column(String(12), nullable=False)
-    actor_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    previous_status: Mapped[str | None] = mapped_column(String(20))
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
     order: Mapped[Order] = relationship(back_populates="history")
+
+
+@event.listens_for(OrderStatusHistory, "before_update")
+@event.listens_for(OrderStatusHistory, "before_delete")
+def _keep_order_history_append_only(_mapper, _connection, _target) -> None:
+    raise ValueError("Order status history is append-only.")
+
+
+@event.listens_for(OrderItem, "before_update")
+@event.listens_for(OrderItem, "before_delete")
+def _keep_order_item_snapshot_immutable(_mapper, _connection, _target) -> None:
+    raise ValueError("Order item snapshots are immutable.")
+
+
+class Delivery(db.Model):
+    """Private pickup or destination instructions for one order."""
+
+    __tablename__ = "deliveries"
+    __table_args__ = (
+        CheckConstraint("method IN ('PICKUP','DELIVERY')", name="ck_deliveries_method"),
+        CheckConstraint(
+            "status IN ('PENDING','PREPARING','READY','IN_TRANSIT','DELIVERED','CANCELLED')",
+            name="ck_deliveries_status",
+        ),
+        CheckConstraint(
+            "method != 'DELIVERY' OR (destination_county IS NOT NULL "
+            "AND location_name IS NOT NULL AND address_text IS NOT NULL "
+            "AND recipient_name IS NOT NULL AND recipient_phone IS NOT NULL)",
+            name="ck_deliveries_destination_required",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    method: Mapped[str] = mapped_column(String(10), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="PENDING", nullable=False)
+    destination_county: Mapped[str | None] = mapped_column(String(40))
+    location_name: Mapped[str | None] = mapped_column(String(120))
+    address_text: Mapped[str | None] = mapped_column(String(500))
+    recipient_name: Mapped[str | None] = mapped_column(String(120))
+    recipient_phone: Mapped[str | None] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fulfilled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    order: Mapped[Order] = relationship(back_populates="delivery")

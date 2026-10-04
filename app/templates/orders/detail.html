@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Order #{{ order.id }} · AgriLink{% endblock %}
+{% block content %}
+{% set is_buyer = current_user.id == order.buyer_id %}
+<div class="d-flex justify-content-between align-items-start mb-4"><div><p class="small text-success fw-semibold mb-1">{{ 'PURCHASE' if is_buyer else 'SALE' }}</p><h1 class="h2">Order #{{ order.id }}</h1><p class="text-muted mb-0">Created {{ order.created_at.strftime('%d %b %Y, %H:%M') }}</p></div><span class="badge fs-6 text-bg-{{ 'success' if order.status == 'COMPLETED' else 'secondary' }}">{{ order.status.replace('_', ' ')|title }}</span></div>
+<div class="row g-4"><section class="col-lg-7">
+  <div class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><h2 class="h5">Order summary</h2><h3 class="h4 mt-3">{{ order.item.title_snapshot }}</h3><p>{{ order.item.quantity }} {{ order.item.unit|lower }} × {{ order.item.unit_price_minor|kes }} / {{ order.item.unit|lower }}</p><hr><div class="d-flex justify-content-between fw-semibold"><span>Total</span><span>{{ order.total_minor|kes }}</span></div><p class="small text-muted mt-3 mb-0">Order prices are fixed from the accepted offer.</p></div></div>
+  <div class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><h2 class="h5">Fulfillment</h2>
+    {% if order.delivery %}<p class="mb-1"><strong>Method:</strong> {{ order.delivery.method|title }}</p>
+      {% if order.delivery.method == 'DELIVERY' %}<p class="mb-1"><strong>Destination:</strong> {{ order.delivery.destination_county }} · {{ order.delivery.location_name }}</p><p class="mb-1"><strong>Directions:</strong> {{ order.delivery.address_text }}</p><p class="mb-0"><strong>Recipient:</strong> {{ order.delivery.recipient_name }} · {{ order.delivery.recipient_phone }}</p>
+      {% else %}<p class="mb-0 text-muted">Pickup from the seller will be coordinated after payment.</p>{% endif %}
+    {% else %}<p class="text-muted">The buyer has not selected pickup or delivery.</p>{% endif %}
+    {% if is_buyer and order.status == 'CONFIRMED' %}<hr><h3 class="h6">Choose or update fulfillment</h3><form method="post" action="{{ url_for('orders.save_delivery', order_id=order.id) }}">{{ form.hidden_tag() }}<div class="mb-2">{{ form.method(class_='form-select') }}</div><div class="mb-2">{{ form.destination_county(class_='form-select') }}</div><div class="mb-2">{{ form.location_name(class_='form-control', placeholder='Town or area') }}</div><div class="mb-2">{{ form.address_text(class_='form-control', rows='2', placeholder='Delivery directions') }}</div><div class="mb-2">{{ form.recipient_name(class_='form-control', placeholder='Recipient name') }}</div><div class="mb-2">{{ form.recipient_phone(class_='form-control', placeholder='Recipient phone') }}</div>{{ form.submit(class_='btn btn-outline-success') }}</form><p class="small text-muted mt-2 mb-0">Private fulfillment details are visible only to the order's buyer and seller.</p>{% endif %}
+  </div></div>
+</section><aside class="col-lg-5">
+  {% if order.status == 'CONFIRMED' %}<div class="alert alert-warning"><strong>Payment required.</strong> Payment is not available in this release. Fulfillment starts after a future verified payment integration.</div>{% endif %}
+  <div class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><h2 class="h5">Order activity</h2><ol class="list-unstyled mb-0">{% for entry in order.history|sort(attribute='created_at') %}<li class="border-start border-2 border-success ps-3 pb-3"><div class="fw-semibold">{{ entry.status.replace('_', ' ')|title }}</div><div class="small text-muted">{{ entry.created_at.strftime('%d %b %Y, %H:%M') }}{% if entry.actor_id == current_user.id %} · you{% elif entry.actor_id is none %} · automatic{% else %} · other party{% endif %}</div></li>{% endfor %}</ol></div></div>
+  <div class="d-flex flex-column gap-2">
+    {% if is_buyer and order.status == 'CONFIRMED' %}<form method="post" action="{{ url_for('orders.action', order_id=order.id, action='cancel') }}">{{ form.csrf_token }}<button class="btn btn-outline-danger w-100">Cancel order</button></form>{% endif %}
+    {% if not is_buyer and order.status == 'PAID' %}<form method="post" action="{{ url_for('orders.action', order_id=order.id, action='start_processing') }}">{{ form.csrf_token }}<button class="btn btn-success w-100">Start preparing order</button></form>{% endif %}
+    {% if not is_buyer and order.status == 'PROCESSING' %}<form method="post" action="{{ url_for('orders.action', order_id=order.id, action='prepare_fulfillment') }}">{{ form.csrf_token }}<button class="btn btn-success w-100">{{ 'Ready for pickup' if order.delivery and order.delivery.method == 'PICKUP' else 'Send into transit' }}</button></form>{% endif %}
+    {% if not is_buyer and order.status in ('READY_FOR_PICKUP', 'IN_TRANSIT') %}<form method="post" action="{{ url_for('orders.action', order_id=order.id, action='mark_delivered') }}">{{ form.csrf_token }}<button class="btn btn-success w-100">{{ 'Mark pickup handed over' if order.delivery and order.delivery.method == 'PICKUP' else 'Mark delivery completed' }}</button></form>{% endif %}
+    {% if is_buyer and order.status == 'DELIVERED' %}<form method="post" action="{{ url_for('orders.action', order_id=order.id, action='confirm_completion') }}">{{ form.csrf_token }}<button class="btn btn-success w-100">Confirm order completed</button></form>{% endif %}
+    {% if order.status in ('COMPLETED', 'CANCELLED') %}<p class="text-muted small">This order is closed.</p>{% endif %}
+  </div>
+</aside></div>
+{% endblock %}
