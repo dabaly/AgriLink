@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Marketplace · AgriLink{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <aside class="col-lg-3">
+    <div class="card border-0 shadow-sm"><div class="card-body">
+      <h1 class="h4">Find farm produce</h1>
+      <form method="get" action="{{ url_for('marketplace.browse') }}" class="vstack gap-3">
+        {% for field in [form.q, form.category, form.county, form.grade, form.unit, form.min_price, form.max_price, form.sort] %}
+          <div><label class="form-label" for="{{ field.id }}">{{ field.label.text }}</label>{{ field(class="form-select" if field.type == "SelectField" else "form-control") }}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+        <button class="btn btn-success" type="submit">Search listings</button>
+      </form>
+    </div></div>
+  </aside>
+  <section class="col-lg-9">
+    <div class="d-flex justify-content-between align-items-center mb-3"><div>
+      <h2 class="h3 mb-1">Fresh from Kenyan farms</h2><p class="text-muted mb-0">{{ pagination.total }} available listings</p>
+    </div>{% if current_user.is_authenticated and current_user.role == 'FARMER' and current_user.phone_verified_at %}
+      <a class="btn btn-success" href="{{ url_for('marketplace.new_listing') }}">List produce</a>{% endif %}</div>
+    {% if pagination.items %}<div class="row g-3">
+      {% for listing in pagination.items %}<div class="col-sm-6 col-xl-4">
+        <article class="card h-100 border-0 shadow-sm listing-card">
+          {% set primary = listing.images|selectattr('is_primary')|first %}
+          {% if primary %}<img class="card-img-top listing-photo" src="{{ url_for('marketplace.listing_image', listing_id=listing.id, image_id=primary.id, variant='thumb') }}" alt="{{ listing.title }}">{% else %}<div class="listing-photo-placeholder">AgriLink harvest</div>{% endif %}
+          <div class="card-body d-flex flex-column"><div class="small text-success fw-semibold">{{ listing.category.name }} · {{ listing.county }}</div>
+            <h3 class="h5 mt-2"><a class="text-decoration-none text-dark" href="{{ url_for('marketplace.detail', listing_id=listing.id) }}">{{ listing.title }}</a></h3>
+                <p class="text-muted small mb-2">{{ listing.quantity }} {{ listing.unit|lower }} · Grade {{ listing.grade }}</p>
+                <p class="small mb-2"><span class="badge text-bg-success">Available</span> <span class="text-muted">by {{ seller_display_name(listing.seller) }}</span></p>
+            <p class="h5 text-success mt-auto mb-0">{{ listing.price_minor|kes }} <span class="small text-muted fw-normal">per listing unit</span></p>
+            <a class="stretched-link" aria-label="View {{ listing.title }}" href="{{ url_for('marketplace.detail', listing_id=listing.id) }}"></a>
+          </div>
+        </article>
+      </div>{% endfor %}
+    </div>{% else %}<div class="empty-state"><h3 class="h5">No listings match those filters</h3><p>Try another county, category, or search.</p></div>{% endif %}
+    {% if pagination.pages > 1 %}<nav class="mt-4" aria-label="Listing pages"><ul class="pagination justify-content-center">
+      {% for page_num in visible_pages %}
+        {% if page_num %}<li class="page-item {{ 'active' if page_num == pagination.page else '' }}"><a class="page-link" href="{{ page_urls[page_num] }}">{{ page_num }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+      {% endfor %}
+    </ul></nav>{% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 # AgriLink
 
-AgriLink is a mobile-responsive agricultural marketplace connecting farmers and buyers. This repository currently contains the runnable Flask foundation; domain features will be added in later implementation batches.
+AgriLink is a mobile-responsive agricultural marketplace connecting farmers and buyers. The Flask application includes phone-verified accounts and a farmer marketplace for browsing and publishing listings.
 
 ## Requirements
 
@@ -31,6 +31,20 @@ Apply the database schema before running the application:
 flask --app wsgi.py db upgrade
 ```
 
+## Marketplace and listings
+
+Run `flask --app wsgi.py seed` after upgrading the database to create the platform-controlled Crops, Livestock, Inputs, and Equipment categories. The seed command is safe to rerun. It does not create demo accounts or sample listings.
+
+Anonymous visitors can browse `/listings`, search listing titles and descriptions, and filter by category, county, grade, unit, and KES price range. Results sort by newest, oldest, or price and are paginated at 12 per page (maximum 24). `/api/listings` uses the same filtering and visibility rules and returns an explicit public JSON shape. `/listings/<id>` shows listing details; `/sellers/<user_id>` shows a farmer's public summary and current public listings.
+
+Verified farmers can create listings at `/listings/new` and manage their own at `/my/listings`. A listing stores whole-number quantity and `price_minor` (KES cents; for example KES 150.00 is 15000). Listings start as `AVAILABLE` and `APPROVED`; normal public pages show only approved, available listings with positive quantity and an active, verified farmer. `UNAVAILABLE`, `SOLD`, and moderation-removed listings are excluded from public results. Moderation removal and seller status remain separate concepts.
+
+Farmers may upload up to six JPEG, PNG, or WebP photos per listing. The request limit is 12 MB and each photo is limited to 5 MB. Pillow verifies and decodes the image, applies EXIF orientation, rejects inputs above 40 megapixels, resizes the full image to at most 1600 pixels, and writes a 400-pixel thumbnail. Both outputs are newly encoded JPEGs without source EXIF metadata. Generated UUID filenames are stored under `instance/uploads/listing_images/`, outside the static tree. Application image routes only serve an image belonging to a currently public listing or an authenticated listing owner; files are not served as an open directory.
+
+Public responses do not include seller phone or email. Coordinates are optional and rounded to two decimal places in JSON, approximately one kilometre. Listing descriptions remain plain text and use normal Jinja escaping. The current profile model has no public display-name field, so seller pages use a generic farmer label alongside existing rating/order summary fields.
+
+The schema adds `categories`, `listings`, and `listing_images`. Composite indexes support public listing filters and ordering, and a partial unique index enforces at most one primary photo per listing on SQLite. Listings do not have a seller hard-delete operation; farmers can mark them unavailable or sold, while moderation removal remains a distinct platform state. This preserves listing records for later marketplace history. Marketplace image deletion commits the database change before unlinking the generated full-size and thumbnail files; if an OS-level unlink fails, the database record is already gone and the orphan file is not addressable through application routes.
+
 Run authentication and foundation tests with `pytest`. No real SMS provider is needed for local development or testing.
 
 ## Commands
@@ -44,7 +58,7 @@ flask --app wsgi.py seed
 flask --app wsgi.py jobs run-maintenance
 ```
 
-`flask db upgrade` applies the checked-in authentication migrations. Use `flask --app wsgi.py db migrate -m "describe change"` to generate later schema revisions. The `create-admin` command prompts for a phone number and password in the terminal; administrator accounts cannot be created through public forms.
+`flask db upgrade` applies the checked-in authentication and marketplace migrations. Use `flask --app wsgi.py db migrate -m "describe change"` to generate later schema revisions. The `create-admin` command prompts for a phone number and password in the terminal; administrator accounts cannot be created through public forms.
 
 ## Checks
 

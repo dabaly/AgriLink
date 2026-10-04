@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from flask_login import UserMixin
 from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, String
@@ -10,6 +11,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
+
+if TYPE_CHECKING:
+    from app.models.marketplace import Listing
 
 
 def utcnow() -> datetime:
@@ -45,6 +49,7 @@ class User(UserMixin, db.Model):
     profile: Mapped[Profile] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    listings: Mapped[list[Listing]] = relationship(back_populates="seller")
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)

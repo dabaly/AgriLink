@@ -20,8 +20,11 @@ def register_cli(app: Flask) -> None:
 
     @app.cli.command("seed")
     def seed_command() -> None:
-        """Seed development data (currently no domain data is defined)."""
-        click.echo("No seed data is defined yet.")
+        """Seed the platform-controlled marketplace categories."""
+        from app.marketplace.services import seed_categories
+
+        count = seed_categories()
+        click.echo(f"Marketplace categories ready ({count} added).")
 
     @app.cli.group("jobs")
     def jobs_group() -> None:

@@ -62,9 +62,15 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
     from app.account import account_bp
     from app.auth import auth_bp
     from app.auth.services import get_otp_provider
+    from app.marketplace import marketplace_bp
+    from app.marketplace.routes import _seller_name
+    from app.marketplace.services import format_kes
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(account_bp)
+    app.register_blueprint(marketplace_bp)
+    app.add_template_filter(format_kes, "kes")
+    app.add_template_global(_seller_name, "seller_display_name")
     app.extensions["agri_link.otp_provider"] = get_otp_provider(app)
 
     @app.get("/")

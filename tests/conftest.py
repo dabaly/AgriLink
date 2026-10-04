@@ -4,8 +4,11 @@ from app import create_app
 
 
 @pytest.fixture
-def app():
-    app = create_app("testing")
+def app(tmp_path):
+    app = create_app(
+        "testing",
+        test_config={"MARKETPLACE_UPLOAD_ROOT": str(tmp_path / "marketplace-uploads")},
+    )
     with app.app_context():
         from app.extensions import db
 

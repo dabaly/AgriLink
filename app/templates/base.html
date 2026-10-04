@@ -13,8 +13,10 @@
   <nav class="navbar navbar-expand-lg bg-white border-bottom">
     <div class="container"><a class="navbar-brand fw-bold text-success" href="{{ url_for('home') }}">AgriLink</a>
       <div class="d-flex gap-3 align-items-center">
+        <a href="{{ url_for('marketplace.browse') }}">Marketplace</a>
         {% if current_user.is_authenticated %}
           <a href="{{ url_for('account.profile') }}">My account</a>
+          {% if current_user.role == 'FARMER' and current_user.phone_verified_at %}<a href="{{ url_for('marketplace.my_listings') }}">My listings</a>{% endif %}
           <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-outline-success btn-sm" type="submit">Log out</button>

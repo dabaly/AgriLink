@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ listing.title }} · AgriLink{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <section class="col-lg-7">
+    <div class="row g-2 mb-3">
+      {% for image in listing.images|sort(attribute='is_primary', reverse=true) %}<div class="{{ 'col-12' if loop.first else 'col-6' }}"><img class="detail-photo w-100 rounded" src="{{ url_for('marketplace.listing_image', listing_id=listing.id, image_id=image.id, variant='full') }}" alt="{{ listing.title }} photo {{ loop.index }}"></div>{% else %}<div class="col-12"><div class="listing-photo-placeholder detail-photo rounded">AgriLink harvest</div></div>{% endfor %}
+    </div>
+    <h1 class="display-6">{{ listing.title }}</h1><p class="text-muted">{{ listing.category.name }} · {{ listing.county }}{% if listing.location_name %} · {{ listing.location_name }}{% endif %}</p>
+    <h2 class="h5 mt-4">About this listing</h2><p class="listing-description">{{ listing.description }}</p>
+  </section>
+  <aside class="col-lg-5"><div class="card border-0 shadow-sm"><div class="card-body p-4">
+    <p class="h2 text-success">{{ listing.price_minor|kes }}</p>
+    <p>{{ listing.quantity }} {{ listing.unit|lower }} available · Grade {{ listing.grade }}</p>
+    <span class="badge text-bg-success">Available</span>
+    <hr><h2 class="h5">Seller</h2><p class="mb-1">{{ seller_display_name(listing.seller) }}</p><p class="text-muted small">Farmer · {{ listing.seller.profile.completed_orders_count if listing.seller.profile else 0 }} completed orders</p>
+    <a class="btn btn-outline-success" href="{{ url_for('marketplace.seller_profile', user_id=listing.seller_id) }}">View seller profile</a>
+  </div></div></aside>
+</div>
+{% endblock %}
