@@ -37,6 +37,25 @@ class BaseConfig:
     AT_API_KEY = os.environ.get("AT_API_KEY", "")
     AT_SENDER_ID = os.environ.get("AT_SENDER_ID", "")
     AUTH_DUMMY_PASSWORD_HASH = None
+    PAYMENT_PROVIDER = os.environ.get("PAYMENT_PROVIDER", "mock")
+    PAYMENT_MOCK_SECRET = os.environ.get("PAYMENT_MOCK_SECRET", "")
+    PAYMENT_PUBLIC_BASE_URL = os.environ.get("PAYMENT_PUBLIC_BASE_URL", "http://localhost:5000")
+    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    MPESA_ENV = os.environ.get("MPESA_ENV", "sandbox")
+    MPESA_CONSUMER_KEY = os.environ.get("MPESA_CONSUMER_KEY", "")
+    MPESA_CONSUMER_SECRET = os.environ.get("MPESA_CONSUMER_SECRET", "")
+    MPESA_SHORTCODE = os.environ.get("MPESA_SHORTCODE", "")
+    MPESA_PASSKEY = os.environ.get("MPESA_PASSKEY", "")
+    MPESA_TRANSACTION_TYPE = os.environ.get("MPESA_TRANSACTION_TYPE", "CustomerPayBillOnline")
+    MPESA_CALLBACK_TOKEN = os.environ.get("MPESA_CALLBACK_TOKEN", "")
+    MPESA_CALLBACK_IP_ALLOWLIST = tuple(
+        filter(None, os.environ.get("MPESA_CALLBACK_IP_ALLOWLIST", "").split(","))
+    )
+    MPESA_INITIATOR_NAME = os.environ.get("MPESA_INITIATOR_NAME", "")
+    MPESA_SECURITY_CREDENTIAL = os.environ.get("MPESA_SECURITY_CREDENTIAL", "")
+    MPESA_REVERSAL_RESULT_URL = os.environ.get("MPESA_REVERSAL_RESULT_URL", "")
+    MPESA_REVERSAL_TIMEOUT_URL = os.environ.get("MPESA_REVERSAL_TIMEOUT_URL", "")
 
 
 class DevelopmentConfig(BaseConfig):

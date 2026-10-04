@@ -2,6 +2,7 @@
 
 from app.models.marketplace import Category, Listing, ListingImage
 from app.models.otp import OtpChallenge, OtpRequestEvent
+from app.models.payment import Payment, PaymentEvent, PaymentStatus
 from app.models.trading import (
     Conversation,
     Delivery,
@@ -21,6 +22,9 @@ __all__ = [
     "ListingImage",
     "Message",
     "Offer",
+    "Payment",
+    "PaymentEvent",
+    "PaymentStatus",
     "Order",
     "OrderItem",
     "OrderStatusHistory",

@@ -9,7 +9,7 @@ from werkzeug.exceptions import Conflict, NotFound
 
 from app.extensions import db
 from app.marketplace.constants import KENYAN_COUNTIES
-from app.models import Listing, User
+from app.models import Listing, Payment, User
 from app.models.marketplace import ListingStatus, ModerationStatus
 from app.models.trading import (
     Conversation,
@@ -232,6 +232,12 @@ class OrderService:
         elif action == "start_processing":
             if actor is None or actor.role != "FARMER" or old_status != "PAID":
                 raise Conflict("Only paid orders can enter fulfillment.")
+            if db.session.scalar(
+                select(Payment.id).where(
+                    Payment.order_id == order.id, Payment.refund_pending.is_(True)
+                )
+            ):
+                raise Conflict("Fulfillment is paused while a refund is pending.")
             if delivery is None:
                 raise Conflict("The buyer must choose pickup or delivery first.")
             new_status = "PROCESSING"
@@ -340,6 +346,81 @@ class OrderService:
             db.session.rollback()
             raise
         db.session.expire(order)
+        return order
+
+    @staticmethod
+    def _mark_paid_after_trusted_payment(order_id: int) -> Order:
+        """Internal payment boundary; called only while processing trusted provider events."""
+        now = _now()
+        changed = db.session.execute(
+            update(Order)
+            .where(Order.id == order_id, Order.status == "CONFIRMED")
+            .values(status="PAID", updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if changed.rowcount != 1:
+            order = db.session.get(Order, order_id)
+            if order is not None:
+                db.session.refresh(order, attribute_names=["status"])
+                if order.status == "PAID":
+                    return order
+            raise Conflict("Order is no longer awaiting payment confirmation.")
+        db.session.add(
+            OrderStatusHistory(
+                order_id=order_id,
+                previous_status="CONFIRMED",
+                status="PAID",
+                actor_id=None,
+                created_at=now,
+            )
+        )
+        order = db.session.get(Order, order_id)
+        db.session.flush()
+        return order
+
+    @staticmethod
+    def _cancel_after_trusted_refund(order_id: int) -> Order:
+        """Cancel a paid order and release its reservation after provider refund confirmation."""
+        order = db.session.get(Order, order_id)
+        if order is None or order.status != "PAID" or order.left_seller_at is not None:
+            raise Conflict("Order cannot be cancelled through this refund path.")
+        now = _now()
+        changed = db.session.execute(
+            update(Order)
+            .where(Order.id == order_id, Order.status == "PAID", Order.left_seller_at.is_(None))
+            .values(status="CANCELLED", cancelled_at=now, updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if changed.rowcount != 1:
+            raise Conflict("Order changed while refund was being processed.")
+        item = order.item
+        released = db.session.execute(
+            update(Listing)
+            .where(Listing.id == order.listing_id)
+            .values(
+                quantity=Listing.quantity + item.quantity,
+                status=case(
+                    (Listing.status == ListingStatus.SOLD.value, ListingStatus.AVAILABLE.value),
+                    else_=Listing.status,
+                ),
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if released.rowcount != 1:
+            raise Conflict("Reserved stock could not be released after refund.")
+        if order.delivery:
+            order.delivery.status = "CANCELLED"
+        db.session.add(
+            OrderStatusHistory(
+                order_id=order.id,
+                previous_status="PAID",
+                status="CANCELLED",
+                actor_id=None,
+                created_at=now,
+            )
+        )
+        db.session.flush()
         return order
 
     @staticmethod

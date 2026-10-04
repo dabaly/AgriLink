@@ -30,6 +30,34 @@ def register_cli(app: Flask) -> None:
     def jobs_group() -> None:
         """Maintenance job commands."""
 
+    @app.cli.group("payments")
+    def payments_group() -> None:
+        """Development and payment operations."""
+
+    @payments_group.command("mock-event")
+    @click.argument("payment_id", type=int)
+    @click.argument(
+        "outcome",
+        type=click.Choice(
+            ["pending", "success", "failed", "expired", "refunded"], case_sensitive=False
+        ),
+    )
+    def mock_payment_event(payment_id: int, outcome: str) -> None:
+        """Simulate a signed mock provider event outside production."""
+        from app.payments.services import PaymentService
+
+        try:
+            event = PaymentService.simulate_mock_event(payment_id, outcome)
+        except Exception as exc:
+            # Keep provider and database internals out of CLI output.
+            raise click.ClickException(
+                str(exc) if isinstance(exc, ValueError) else "Mock event could not be processed."
+            ) from exc
+        click.echo(
+            f"Mock event {event.provider_event_id}: {event.processing_status.lower()} "
+            f"({event.result_message})."
+        )
+
     @jobs_group.command("run-maintenance")
     def maintenance_command() -> None:
         """Expire offers and complete delivered orders past the grace period."""

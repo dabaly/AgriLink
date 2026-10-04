@@ -92,3 +92,24 @@ bandit -r app
 ```
 
 For deployment, set `AGRI_LINK_CONFIG=production` and provide a unique secret key and production database URL through the environment. HTTPS is required for secure production session cookies.
+
+## Payments (Batch 6)
+
+Buyer payments are tied to a confirmed order. The server reads the order total and records it as integer KES minor units; the browser cannot supply an amount or currency. Creating a checkout request leaves the order `CONFIRMED`. Only a validated provider event or trusted provider status query can atomically move it to `PAID`. Returning from a provider checkout is informational only.
+
+`PaymentService` owns provider access and reconciliation. It uses a normalized `PaymentProvider` interface with `MockPaymentProvider`, `MpesaPaymentProvider` (Daraja STK Push/status query/reversal request), and `StripePaymentProvider` (hosted Checkout, signed webhooks, session query, and refund request). `Payment` stores attempt state; `PaymentEvent` stores unique provider event IDs, a digest, and a sanitized processing result. Raw callbacks and credentials are not stored.
+
+The default `PAYMENT_PROVIDER=mock` works offline. In a non-production environment, initiate payment from a buyer's confirmed order, then run `flask payments mock-event PAYMENT_ID success` (or `pending`, `failed`, or `expired`) to send an HMAC-signed simulated event through the same verification and state transition path. Mock callbacks are hidden in production. A mock refund can be confirmed with the `refunded` outcome after an authorized refund request.
+
+Provider configuration is environment-only; `.env.example` contains placeholders. For Stripe, configure `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and an externally reachable `PAYMENT_PUBLIC_BASE_URL`, then register `/payments/webhooks/stripe` with the provider. For Daraja, configure `MPESA_ENV`, consumer credentials, shortcode, passkey, a random callback token, and public HTTPS base URL. Register `/payments/webhooks/mpesa/<callback-token>` as the STK callback. Configure `MPESA_CALLBACK_IP_ALLOWLIST` at the reverse proxy/network boundary where available. Daraja callback data is token-protected because that callback format does not provide a request signature. Reversal callbacks and live provider credentials still require environment-specific provider setup; live M-Pesa and Stripe transactions have not been tested by this project.
+
+Webhook endpoints are the only CSRF-exempt routes. Stripe events use the raw body and timestamped HMAC signature. The Daraja callback uses the high-entropy URL token plus optional source IP allowlist. Provider event IDs are unique and repeated deliveries do not repeat transitions. A partial unique index permits at most one active attempt and one successful/refunded attempt per order. Refund requests are admin-service-only, use the server-known amount, pause seller fulfillment while pending, and cancel/release an unshipped order only after a trusted refund confirmation.
+
+Payment routes:
+
+- `POST /payments/orders/<order_id>/initiate` — authenticated buyer, CSRF protected.
+- `POST /payments/webhooks/stripe` — signed Stripe webhook.
+- `POST /payments/webhooks/mock` — HMAC-signed development event endpoint, unavailable in production.
+- `POST /payments/webhooks/mpesa/<callback-token>` — Daraja callback.
+
+Buyer and seller payment visibility follows the existing order access rules. Payment credentials, buyer contact data, callback payloads, and provider secrets are never serialized to the UI.

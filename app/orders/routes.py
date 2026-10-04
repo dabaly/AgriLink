@@ -9,6 +9,7 @@ from werkzeug.exceptions import Conflict, NotFound
 from app.extensions import socketio
 from app.orders.forms import DeliveryForm, OrderActionForm
 from app.orders.services import OrderService, OrderValidationError
+from app.payments.services import PaymentService
 
 orders_bp = Blueprint("orders", __name__)
 
@@ -44,7 +45,8 @@ def detail(order_id: int):
     except NotFound:
         abort(404)
     delivery_form = DeliveryForm()
-    return render_template("orders/detail.html", order=order, form=delivery_form)
+    payment = PaymentService.latest_for_order(current_user, order.id)
+    return render_template("orders/detail.html", order=order, form=delivery_form, payment=payment)
 
 
 @orders_bp.post("/orders/<int:order_id>/delivery")
