@@ -42,6 +42,7 @@ from app.marketplace.services import (
 )
 from app.models import Category, Listing
 from app.models.marketplace import ListingStatus, Unit
+from app.reviews.services import ReviewService
 
 
 def _active_categories():
@@ -114,7 +115,13 @@ def browse():
 @marketplace_bp.get("/listings/<int:listing_id>")
 def detail(listing_id):
     listing = get_public_listing(listing_id)
-    return render_template("marketplace/detail.html", listing=listing)
+    return render_template(
+        "marketplace/detail.html",
+        listing=listing,
+        reviews=ReviewService.public_reviews_for_listing(listing.id),
+        rating_average=ReviewService.seller_review_summary(listing.seller_id)[0],
+        rating_count=ReviewService.seller_review_summary(listing.seller_id)[1],
+    )
 
 
 @marketplace_bp.get("/sellers/<int:user_id>")
@@ -126,7 +133,15 @@ def seller_profile(user_id):
         per_page=12,
         error_out=False,
     )
-    return render_template("marketplace/seller.html", seller=seller, pagination=listings)
+    rating_average, rating_count = ReviewService.seller_review_summary(seller.id)
+    return render_template(
+        "marketplace/seller.html",
+        seller=seller,
+        pagination=listings,
+        rating_average=rating_average,
+        rating_count=rating_count,
+        reviews=ReviewService.public_reviews_for_seller(seller.id),
+    )
 
 
 @marketplace_bp.get("/my/listings")

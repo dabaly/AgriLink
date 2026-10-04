@@ -219,7 +219,7 @@ class OrderService:
         return OrderService._transition(order, action, actor=actor)
 
     @staticmethod
-    def _transition(order: Order, action: str, *, actor: User | None) -> Order:
+    def _transition(order: Order, action: str, *, actor: User | None, commit: bool = True) -> Order:
         old_status = order.status
         delivery = order.delivery
         now = _now()
@@ -228,6 +228,34 @@ class OrderService:
         if action == "cancel":
             if old_status != "CONFIRMED" or order.left_seller_at is not None:
                 raise Conflict("This order can no longer be cancelled.")
+            new_status = "CANCELLED"
+        elif action == "open_dispute":
+            if actor is None or actor.role not in {"BUYER", "FARMER"}:
+                raise NotFound()
+            OrderService._owned(actor, order.id)
+            if old_status not in {
+                "PAID",
+                "PROCESSING",
+                "READY_FOR_PICKUP",
+                "IN_TRANSIT",
+                "DELIVERED",
+            }:
+                raise Conflict("This order is not eligible for a dispute.")
+            new_status = "DISPUTED"
+        elif action == "resolve_dispute_for_seller":
+            if (
+                actor is None
+                or not actor.is_authenticated
+                or actor.role != "ADMIN"
+                or actor.phone_verified_at is None
+            ):
+                raise NotFound()
+            if old_status != "DISPUTED":
+                raise Conflict("Only disputed orders can be completed by resolution.")
+            new_status = "COMPLETED"
+        elif action == "refund_confirmed":
+            if actor is not None or old_status not in {"PAID", "DISPUTED"}:
+                raise Conflict("Only a trusted refund event can cancel this order.")
             new_status = "CANCELLED"
         elif action == "start_processing":
             if actor is None or actor.role != "FARMER" or old_status != "PAID":
@@ -301,24 +329,28 @@ class OrderService:
             db.session.rollback()
             raise Conflict("The order changed; reload it and try again.")
 
-        if action == "cancel":
-            item = order.item
-            listing = db.session.execute(
-                update(Listing)
-                .where(Listing.id == order.listing_id)
-                .values(
-                    quantity=Listing.quantity + item.quantity,
-                    status=case(
-                        (Listing.status == ListingStatus.SOLD.value, ListingStatus.AVAILABLE.value),
-                        else_=Listing.status,
-                    ),
-                    updated_at=now,
+        if action in {"cancel", "refund_confirmed"}:
+            if order.left_seller_at is None:
+                item = order.item
+                listing = db.session.execute(
+                    update(Listing)
+                    .where(Listing.id == order.listing_id)
+                    .values(
+                        quantity=Listing.quantity + item.quantity,
+                        status=case(
+                            (
+                                Listing.status == ListingStatus.SOLD.value,
+                                ListingStatus.AVAILABLE.value,
+                            ),
+                            else_=Listing.status,
+                        ),
+                        updated_at=now,
+                    )
+                    .execution_options(synchronize_session=False)
                 )
-                .execution_options(synchronize_session=False)
-            )
-            if listing.rowcount != 1:
-                db.session.rollback()
-                raise Conflict("Reserved stock could not be released.")
+                if listing.rowcount != 1:
+                    db.session.rollback()
+                    raise Conflict("Reserved stock could not be released.")
             if delivery:
                 delivery.status = "CANCELLED"
         elif action == "start_processing":
@@ -340,11 +372,12 @@ class OrderService:
                 created_at=now,
             )
         )
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            raise
+        if commit:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                raise
         db.session.expire(order)
         return order
 
@@ -379,49 +412,28 @@ class OrderService:
         return order
 
     @staticmethod
-    def _cancel_after_trusted_refund(order_id: int) -> Order:
-        """Cancel a paid order and release its reservation after provider refund confirmation."""
+    def _mark_disputed(actor: User, order_id: int) -> Order:
+        """Move an authorized participant's eligible order into dispute state."""
+        order = OrderService._owned(actor, order_id)
+        return OrderService._transition(order, "open_dispute", actor=actor, commit=False)
+
+    @staticmethod
+    def _complete_disputed_for_seller(actor: User, order_id: int) -> Order:
+        """Complete a seller-favorable dispute through the authoritative order state path."""
         order = db.session.get(Order, order_id)
-        if order is None or order.status != "PAID" or order.left_seller_at is not None:
-            raise Conflict("Order cannot be cancelled through this refund path.")
-        now = _now()
-        changed = db.session.execute(
-            update(Order)
-            .where(Order.id == order_id, Order.status == "PAID", Order.left_seller_at.is_(None))
-            .values(status="CANCELLED", cancelled_at=now, updated_at=now)
-            .execution_options(synchronize_session=False)
+        if order is None:
+            raise NotFound()
+        return OrderService._transition(
+            order, "resolve_dispute_for_seller", actor=actor, commit=False
         )
-        if changed.rowcount != 1:
-            raise Conflict("Order changed while refund was being processed.")
-        item = order.item
-        released = db.session.execute(
-            update(Listing)
-            .where(Listing.id == order.listing_id)
-            .values(
-                quantity=Listing.quantity + item.quantity,
-                status=case(
-                    (Listing.status == ListingStatus.SOLD.value, ListingStatus.AVAILABLE.value),
-                    else_=Listing.status,
-                ),
-                updated_at=now,
-            )
-            .execution_options(synchronize_session=False)
-        )
-        if released.rowcount != 1:
-            raise Conflict("Reserved stock could not be released after refund.")
-        if order.delivery:
-            order.delivery.status = "CANCELLED"
-        db.session.add(
-            OrderStatusHistory(
-                order_id=order.id,
-                previous_status="PAID",
-                status="CANCELLED",
-                actor_id=None,
-                created_at=now,
-            )
-        )
-        db.session.flush()
-        return order
+
+    @staticmethod
+    def _cancel_after_trusted_refund(order_id: int) -> Order:
+        """Cancel after confirmed refund, releasing stock only before physical handoff."""
+        order = db.session.get(Order, order_id)
+        if order is None:
+            raise NotFound()
+        return OrderService._transition(order, "refund_confirmed", actor=None, commit=False)
 
     @staticmethod
     def complete_delivered_orders(now: datetime | None = None) -> int:

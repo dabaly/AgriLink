@@ -113,3 +113,13 @@ Payment routes:
 - `POST /payments/webhooks/mpesa/<callback-token>` — Daraja callback.
 
 Buyer and seller payment visibility follows the existing order access rules. Payment credentials, buyer contact data, callback payloads, and provider secrets are never serialized to the UI.
+
+## Reviews and disputes (Batch 7)
+
+Reviews are available only to a verified buyer for an order that reached `COMPLETED` and contains the purchased listing. The database permits one immutable review per order, with a whole-number rating from 1 to 5 and a plain-text comment up to 2,000 characters. Public seller and listing pages show recent reviews and aggregate ratings; reviewer identity is shown as a generic buyer label, without phone or email.
+
+Verified buyers or farmers who own an order may open one dispute while it is `PAID`, `PROCESSING`, `READY_FOR_PICKUP`, `IN_TRANSIT`, or `DELIVERED`. Opening a dispute moves the order to `DISPUTED` through `OrderService`. A minimal verified-admin queue supports `OPEN` → `UNDER_REVIEW` and a recorded resolution for either party. Seller-favorable resolution completes the order through `OrderService`. Buyer-favorable resolution requests a provider refund through `PaymentService`; the dispute remains under review until a trusted provider event confirms the refund. A provider failure clears the pending request and leaves the dispute under review.
+
+After a confirmed buyer refund, the order becomes `CANCELLED`. Reserved listing quantity is returned only when the order has not physically left the seller, following the existing order inventory rule. No quantity is restored after handoff. Dispute state/history, order state/history, and payment state remain within their respective services; public pages expose neither private buyer contact data nor payment/provider information.
+
+Feedback routes include `POST /orders/<order_id>/reviews`, participant dispute views under `/disputes/<id>`, and the minimal admin queue at `/admin/disputes` with CSRF-protected resolution actions. No notification system or broader admin dashboard is part of this batch.

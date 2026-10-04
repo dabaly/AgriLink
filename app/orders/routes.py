@@ -6,10 +6,14 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 from werkzeug.exceptions import Conflict, NotFound
 
+from app.disputes.forms import DisputeForm
+from app.disputes.services import DisputeService
 from app.extensions import socketio
 from app.orders.forms import DeliveryForm, OrderActionForm
 from app.orders.services import OrderService, OrderValidationError
 from app.payments.services import PaymentService
+from app.reviews.forms import ReviewForm
+from app.reviews.services import ReviewService
 
 orders_bp = Blueprint("orders", __name__)
 
@@ -46,7 +50,18 @@ def detail(order_id: int):
         abort(404)
     delivery_form = DeliveryForm()
     payment = PaymentService.latest_for_order(current_user, order.id)
-    return render_template("orders/detail.html", order=order, form=delivery_form, payment=payment)
+    review = ReviewService.get_order_review(current_user, order.id)
+    dispute = DisputeService.get_for_order(current_user, order.id)
+    return render_template(
+        "orders/detail.html",
+        order=order,
+        form=delivery_form,
+        payment=payment,
+        review=review,
+        review_form=ReviewForm(),
+        dispute=dispute,
+        dispute_form=DisputeForm(),
+    )
 
 
 @orders_bp.post("/orders/<int:order_id>/delivery")

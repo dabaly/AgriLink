@@ -2,7 +2,7 @@
 {% block title %}Farmer profile · AgriLink{% endblock %}
 {% block content %}
 <section class="seller-heading rounded p-4 mb-4"><div class="small text-success fw-semibold">AGRI LINK FARMER</div><h1 class="h2 mt-2">{{ seller_display_name(seller) }}</h1>
-  {% if seller.profile and seller.profile.rating_count %}<p class="mb-1">{{ "%.1f"|format(seller.profile.rating_avg or 0) }} / 5 from {{ seller.profile.rating_count }} ratings</p>{% endif %}
+  {% if rating_count %}<p class="mb-1">{{ rating_average }} / 5 from {{ rating_count }} reviews</p>{% endif %}
   <p class="text-muted mb-0">{{ seller.profile.completed_orders_count if seller.profile else 0 }} completed orders</p>
 </section>
 <h2 class="h4">Available listings</h2>
@@ -10,5 +10,6 @@
   {% set primary = listing.images|selectattr('is_primary')|first %}{% if primary %}<img class="card-img-top listing-photo" src="{{ url_for('marketplace.listing_image', listing_id=listing.id, image_id=primary.id, variant='thumb') }}" alt="{{ listing.title }}">{% endif %}
   <div class="card-body"><div class="small text-success">{{ listing.category.name }} · {{ listing.county }}</div><h3 class="h5 mt-2"><a class="text-dark" href="{{ url_for('marketplace.detail', listing_id=listing.id) }}">{{ listing.title }}</a></h3><p>{{ listing.quantity }} {{ listing.unit|lower }} · {{ listing.price_minor|kes }}</p></div>
 </article></div>{% endfor %}</div>{% else %}<p class="text-muted">No available listings right now.</p>{% endif %}
+{% if reviews %}<section class="mt-5"><h2 class="h4">Buyer reviews</h2><div class="row g-3">{% for review in reviews %}<div class="col-md-6"><article class="card h-100 border-0 shadow-sm"><div class="card-body"><p class="text-warning mb-1">{{ '★' * review.rating }}{{ '☆' * (5 - review.rating) }}</p><p style="white-space: pre-line">{{ review.body }}</p><p class="small text-muted mb-0">AgriLink buyer · {{ review.created_at|nairobi }}</p></div></article></div>{% endfor %}</div></section>{% endif %}
 {% if pagination.pages > 1 %}<nav class="mt-4"><ul class="pagination">{% for n in range(1, pagination.pages + 1) %}<li class="page-item {{ 'active' if n == pagination.page else '' }}"><a class="page-link" href="{{ url_for('marketplace.seller_profile', user_id=seller.id, page=n) }}">{{ n }}</a></li>{% endfor %}</ul></nav>{% endif %}
 {% endblock %}

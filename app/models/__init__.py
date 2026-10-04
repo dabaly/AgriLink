@@ -1,5 +1,6 @@
 """AgriLink database models."""
 
+from app.models.feedback import Dispute, DisputeHistory, DisputeReason, DisputeStatus, Review
 from app.models.marketplace import Category, Listing, ListingImage
 from app.models.otp import OtpChallenge, OtpRequestEvent
 from app.models.payment import Payment, PaymentEvent, PaymentStatus
@@ -18,6 +19,10 @@ __all__ = [
     "Category",
     "Conversation",
     "Delivery",
+    "Dispute",
+    "DisputeHistory",
+    "DisputeReason",
+    "DisputeStatus",
     "Listing",
     "ListingImage",
     "Message",
@@ -31,5 +36,6 @@ __all__ = [
     "OtpChallenge",
     "OtpRequestEvent",
     "Profile",
+    "Review",
     "User",
 ]

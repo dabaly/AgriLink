@@ -18,6 +18,7 @@
         {% if current_user.is_authenticated %}
           {% if current_user.role in ('BUYER', 'FARMER') and current_user.phone_verified_at %}<a href="{{ url_for('chat.conversations') }}">Messages{% if unread_total|default(0) %} <span class="badge text-bg-success">{{ unread_total }}</span>{% endif %}</a>{% endif %}
           {% if current_user.role == 'BUYER' and current_user.phone_verified_at %}<a href="{{ url_for('orders.buyer_orders') }}">My orders</a>{% elif current_user.role == 'FARMER' and current_user.phone_verified_at %}<a href="{{ url_for('orders.seller_orders') }}">Sales</a>{% endif %}
+          {% if current_user.role == 'ADMIN' and current_user.phone_verified_at %}<a href="{{ url_for('disputes.admin_list') }}">Disputes</a>{% endif %}
           <a href="{{ url_for('account.profile') }}">My account</a>
           {% if current_user.role == 'FARMER' and current_user.phone_verified_at %}<a href="{{ url_for('marketplace.my_listings') }}">My listings</a>{% endif %}
           <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">

@@ -255,6 +255,9 @@ class PaymentService:
                 payment.refund_pending = False
                 record.processing_status = "PROCESSED"
                 record.result_message = "Refund failed; payment remains successful."
+                from app.disputes.services import DisputeService
+
+                DisputeService._refund_failed(order.id, event.failure_code)
             elif payment.status not in {
                 PaymentStatus.SUCCEEDED.value,
                 PaymentStatus.REFUNDED.value,
@@ -288,8 +291,11 @@ class PaymentService:
                 payment.status = PaymentStatus.REFUNDED.value
                 payment.refund_pending = False
                 payment.refunded_at = datetime.now(UTC)
-                if order.status == "PAID":
+                if order.status in {"PAID", "DISPUTED"}:
                     OrderService._cancel_after_trusted_refund(order.id)
+                    from app.disputes.services import DisputeService
+
+                    DisputeService._finalize_buyer_resolution(order.id)
                 record.processing_status = "PROCESSED"
                 record.result_message = "Refund confirmed."
             else:
@@ -362,14 +368,19 @@ class PaymentService:
                 Payment.id == payment_id,
                 Payment.status == PaymentStatus.SUCCEEDED.value,
                 Payment.refund_pending.is_(False),
-                Payment.order.has(and_(Order.status == "PAID", Order.left_seller_at.is_(None))),
+                Payment.order.has(
+                    or_(
+                        and_(Order.status == "PAID", Order.left_seller_at.is_(None)),
+                        Order.status == "DISPUTED",
+                    )
+                ),
             )
             .values(refund_pending=True)
             .execution_options(synchronize_session=False)
         )
         if claimed.rowcount != 1:
             db.session.rollback()
-            raise Conflict("Only a paid order that has not left the seller can be refunded.")
+            raise Conflict("This order does not have an eligible successful payment to refund.")
         db.session.commit()
         try:
             result = cls.provider(payment.provider.lower()).refund(payment)
@@ -382,6 +393,28 @@ class PaymentService:
         payment.refund_reference = result.reference
         db.session.commit()
         return payment
+
+    @classmethod
+    def refund_order(cls, actor: User, order_id: int) -> Payment:
+        """Request a provider refund for the successful payment attached to an order."""
+        if (
+            not actor
+            or not actor.is_authenticated
+            or actor.role != "ADMIN"
+            or actor.phone_verified_at is None
+        ):
+            raise NotFound()
+        payment = db.session.scalar(
+            select(Payment)
+            .where(
+                Payment.order_id == order_id,
+                Payment.status == PaymentStatus.SUCCEEDED.value,
+            )
+            .order_by(Payment.created_at.desc())
+        )
+        if payment is None:
+            raise Conflict("This order has no successful payment to refund.")
+        return cls.refund(actor, payment.id)
 
     @classmethod
     def simulate_mock_event(cls, payment_id: int, outcome: str) -> PaymentEvent:
