@@ -2,3 +2,6 @@
 body { min-height: 100vh; display: flex; flex-direction: column; background: #fbfcfa; }
 main { flex: 1; }
 .hero { background: linear-gradient(135deg, #f0f7ed, #fff); border: 1px solid #e4eee0; }
+.auth-card { max-width: 30rem; padding: clamp(1.25rem, 5vw, 2rem); background: #fff; border: 1px solid #e4eee0; border-radius: 1rem; }
+.form-error { color: #b02a37; font-size: .875rem; margin-top: .25rem; }
+.role-choice { min-height: 3.5rem; padding: .75rem 1rem; border: 1px solid #dce7d8; border-radius: .5rem; cursor: pointer; }

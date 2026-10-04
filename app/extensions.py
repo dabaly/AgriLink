@@ -20,6 +20,5 @@ csrf = CSRFProtect()
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 login_manager = LoginManager()
 login_manager.session_protection = "strong"
-login_manager.login_view = "home"
-login_manager.user_loader(lambda _user_id: None)
+login_manager.login_view = "auth.login"
 socketio = SocketIO()

@@ -18,9 +18,12 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
     """Create and configure an AgriLink application instance."""
     app = Flask(__name__, instance_relative_config=True)
     selected_config = config_name or os.environ.get("AGRI_LINK_CONFIG", "development")
+    app.config["AGRI_LINK_CONFIG"] = selected_config
     app.config.from_object(config_by_name.get(selected_config, config_by_name["development"]))
-    if selected_config == "production" and not app.config.get("SECRET_KEY"):
-        raise RuntimeError("SECRET_KEY must be set when AGRI_LINK_CONFIG=production")
+    if selected_config == "production":
+        missing = [name for name in ("SECRET_KEY", "OTP_PEPPER") if not app.config.get(name)]
+        if missing:
+            raise RuntimeError(f"{', '.join(missing)} must be set when AGRI_LINK_CONFIG=production")
     if test_config:
         app.config.update(test_config)
 
@@ -30,7 +33,13 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
     from app.extensions import db
 
     db.init_app(app)
-    configure_sqlite(app)
+    from app import models  # noqa: F401
+    from app.auth.services import load_user
+
+    login_manager.user_loader(load_user)
+
+    with app.app_context():
+        configure_sqlite(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
     limiter.init_app(app)
@@ -50,6 +59,14 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
 
     register_cli(app)
 
+    from app.account import account_bp
+    from app.auth import auth_bp
+    from app.auth.services import get_otp_provider
+
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(account_bp)
+    app.extensions["agri_link.otp_provider"] = get_otp_provider(app)
+
     @app.get("/")
     def home():
         return render_template("home.html")
@@ -67,9 +84,7 @@ def configure_logging(app: Flask) -> None:
             "version": 1,
             "disable_existing_loggers": False,
             "formatters": {
-                "standard": {
-                    "format": "%(asctime)s %(levelname)s %(name)s: %(message)s"
-                }
+                "standard": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"}
             },
             "handlers": {
                 "console": {"class": "logging.StreamHandler", "formatter": "standard"},
@@ -93,9 +108,12 @@ def configure_sqlite(app: Flask) -> None:
         return
 
     from sqlalchemy import event
-    from sqlalchemy.engine import Engine
 
-    @event.listens_for(Engine, "connect")
+    from app.extensions import db
+
+    engine = db.engine
+
+    @event.listens_for(engine, "connect")
     def set_sqlite_pragmas(connection, _record):
         if connection.__class__.__module__ != "sqlite3":
             return

@@ -26,6 +26,17 @@ class BaseConfig:
     RATELIMIT_HEADERS_ENABLED = True
     SOCKETIO_CORS_ALLOWED_ORIGINS: list[str] = []
     JSON_SORT_KEYS = False
+    OTP_PROVIDER = os.environ.get("OTP_PROVIDER", "mock")
+    OTP_PEPPER = os.environ.get("OTP_PEPPER") or SECRET_KEY
+    OTP_TTL_SECONDS = 300
+    OTP_MAX_ATTEMPTS = 5
+    OTP_RESEND_COOLDOWN_SECONDS = 60
+    OTP_MAX_SENDS_PER_HOUR = 5
+    OTP_MAX_REQUESTS_PER_IP_PER_HOUR = 20
+    AT_USERNAME = os.environ.get("AT_USERNAME", "")
+    AT_API_KEY = os.environ.get("AT_API_KEY", "")
+    AT_SENDER_ID = os.environ.get("AT_SENDER_ID", "")
+    AUTH_DUMMY_PASSWORD_HASH = None
 
 
 class DevelopmentConfig(BaseConfig):
@@ -34,7 +45,7 @@ class DevelopmentConfig(BaseConfig):
 
 class TestingConfig(BaseConfig):
     TESTING = True
-    WTF_CSRF_ENABLED = False
+    WTF_CSRF_ENABLED = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     RATELIMIT_ENABLED = False
     SECRET_KEY = os.urandom(32)
@@ -43,6 +54,7 @@ class TestingConfig(BaseConfig):
 class ProductionConfig(BaseConfig):
     DEBUG = False
     SECRET_KEY = os.environ.get("SECRET_KEY")
+    OTP_PEPPER = os.environ.get("OTP_PEPPER")
     SESSION_COOKIE_SECURE = True
     PREFERRED_URL_SCHEME = "https"
 

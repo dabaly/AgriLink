@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Choose your role | AgriLink{% endblock %}
+{% block content %}
+<div class="auth-card mx-auto">
+  <h1 class="h2 mb-2">How will you use AgriLink?</h1>
+  <p class="text-muted mb-4">Choose your role. This selection cannot be changed later.</p>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    {% for value, label in form.role.choices %}
+      <label class="role-choice d-flex align-items-center gap-3 mb-3">
+        <input class="form-check-input" type="radio" name="role" value="{{ value }}" {% if form.role.data == value %}checked{% endif %}>
+        <span>{{ label }}</span>
+      </label>
+    {% endfor %}
+    {% for error in form.role.errors %}<div class="form-error mb-3">{{ error }}</div>{% endfor %}
+    {{ form.submit(class_="btn btn-success w-100") }}
+  </form>
+</div>
+{% endblock %}

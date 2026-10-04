@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}My account | AgriLink{% endblock %}
+{% block content %}
+<section class="auth-card mx-auto">
+  <h1 class="h2 mb-4">My account</h1>
+  <dl class="row mb-0">
+    <dt class="col-sm-5">Phone</dt><dd class="col-sm-7">{{ user.phone }}</dd>
+    <dt class="col-sm-5">Phone verified</dt><dd class="col-sm-7">{{ "Yes" if user.phone_verified_at else "No" }}</dd>
+    <dt class="col-sm-5">Role</dt><dd class="col-sm-7">{{ user.role|title }}</dd>
+    <dt class="col-sm-5">Profile</dt><dd class="col-sm-7">{{ "Ready" if user.profile else "Not set up" }}</dd>
+  </dl>
+</section>
+{% endblock %}

@@ -5,7 +5,14 @@ from app import create_app
 
 @pytest.fixture
 def app():
-    return create_app("testing", test_config={"WTF_CSRF_ENABLED": False})
+    app = create_app("testing")
+    with app.app_context():
+        from app.extensions import db
+
+        db.create_all()
+        yield app
+        db.session.remove()
+        db.drop_all()
 
 
 @pytest.fixture
