@@ -45,7 +45,17 @@ Public responses do not include seller phone or email. Coordinates are optional 
 
 The schema adds `categories`, `listings`, and `listing_images`. Composite indexes support public listing filters and ordering, and a partial unique index enforces at most one primary photo per listing on SQLite. Listings do not have a seller hard-delete operation; farmers can mark them unavailable or sold, while moderation removal remains a distinct platform state. This preserves listing records for later marketplace history. Marketplace image deletion commits the database change before unlinking the generated full-size and thumbnail files; if an OS-level unlink fails, the database record is already gone and the orphan file is not addressable through application routes.
 
-Run authentication and foundation tests with `pytest`. No real SMS provider is needed for local development or testing.
+## Conversations, offers, and confirmed orders
+
+Verified buyers can open a conversation from a public listing. Buyers and the listing's farmer can use `/conversations` and `/conversations/<id>` to read persistent messages and offer history. Messages can be sent through the CSRF-protected HTML/HTTP routes or authenticated Socket.IO events; Socket.IO clients join user rooms on connect and conversation rooms only after participant authorization. The HTTP route remains available if realtime transport is unavailable. Messages are plain text, immutable after sending, and limited to 2,000 characters; a shared per-user rate limit applies to HTTP and Socket.IO sends.
+
+Either participant can make or counter one pending offer per conversation. Quantity and KES-per-unit price are validated on the server, totals use integer minor units, and offers expire after 48 hours. Expiry is also lazy-applied when offers are viewed or acted on. Run `flask --app wsgi.py jobs expire-offers` to expire stale pending offers in maintenance; `jobs run-maintenance` runs the same task.
+
+Accepting another participant's unexpired offer atomically changes the offer to accepted, decrements available listing quantity, creates one confirmed order with a single immutable title/quantity/unit/price snapshot, and records its initial status history. The update only succeeds if the listing remains publicly purchasable and has sufficient stock. If the accepted offer consumes the remaining quantity, the listing becomes sold. This is the Batch 4 stock claim boundary; it does not implement reservation, checkout, payment, delivery, or subsequent order workflows.
+
+The schema adds `conversations`, `messages`, `offers`, `orders`, `order_items`, and `order_status_history`. Conversations are unique per listing and buyer; messages and offers are retained as history. A partial unique index permits only one pending offer per conversation, and each confirmed order references its accepted offer uniquely. No phone numbers, email addresses, private profile fields, or filesystem details are included in chat payloads.
+
+Run authentication, marketplace, chat, and offer tests with `pytest`. No real SMS provider is needed for local development or testing.
 
 ## Commands
 
@@ -56,9 +66,10 @@ flask --app wsgi.py db upgrade
 flask --app wsgi.py create-admin
 flask --app wsgi.py seed
 flask --app wsgi.py jobs run-maintenance
+flask --app wsgi.py jobs expire-offers
 ```
 
-`flask db upgrade` applies the checked-in authentication and marketplace migrations. Use `flask --app wsgi.py db migrate -m "describe change"` to generate later schema revisions. The `create-admin` command prompts for a phone number and password in the terminal; administrator accounts cannot be created through public forms.
+`flask db upgrade` applies the checked-in authentication, marketplace, conversation, offer, and order-foundation migrations. Use `flask --app wsgi.py db migrate -m "describe change"` to generate later schema revisions. The `create-admin` command prompts for a phone number and password in the terminal; administrator accounts cannot be created through public forms.
 
 ## Checks
 

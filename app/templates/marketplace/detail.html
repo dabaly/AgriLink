@@ -15,6 +15,7 @@
     <span class="badge text-bg-success">Available</span>
     <hr><h2 class="h5">Seller</h2><p class="mb-1">{{ seller_display_name(listing.seller) }}</p><p class="text-muted small">Farmer · {{ listing.seller.profile.completed_orders_count if listing.seller.profile else 0 }} completed orders</p>
     <a class="btn btn-outline-success" href="{{ url_for('marketplace.seller_profile', user_id=listing.seller_id) }}">View seller profile</a>
+    {% if current_user.is_authenticated and current_user.role == 'BUYER' and current_user.phone_verified_at and current_user.id != listing.seller_id %}<form class="mt-3" method="post" action="{{ url_for('chat.start_conversation', listing_id=listing.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-success w-100">Message seller</button></form>{% endif %}
   </div></div></aside>
 </div>
 {% endblock %}

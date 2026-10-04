@@ -32,5 +32,14 @@ def register_cli(app: Flask) -> None:
 
     @jobs_group.command("run-maintenance")
     def maintenance_command() -> None:
-        """Run scheduled maintenance tasks (none are defined yet)."""
-        click.echo("No maintenance tasks are defined yet.")
+        """Expire offers whose response window has elapsed."""
+        from app.chat.services import expire_pending_offers
+
+        click.echo(f"Expired {expire_pending_offers()} pending offer(s).")
+
+    @jobs_group.command("expire-offers")
+    def expire_offers_command() -> None:
+        """Expire pending offers after their 48-hour response window."""
+        from app.chat.services import expire_pending_offers
+
+        click.echo(f"Expired {expire_pending_offers()} pending offer(s).")

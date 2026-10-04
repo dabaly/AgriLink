@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ conversation.listing.title }} · Messages{% endblock %}
+{% block page_scripts %}<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.3/dist/socket.io.min.js" defer></script>{% endblock %}
+{% block content %}
+{% set other = conversation.listing.seller if current_user.id == conversation.buyer_id else conversation.buyer %}
+<div class="row g-4" data-chat data-conversation-id="{{ conversation.id }}">
+  <section class="col-lg-8">
+    <div class="d-flex justify-content-between align-items-start mb-3"><div><p class="small text-success fw-semibold mb-1">CONVERSATION</p><h1 class="h3">{{ conversation.listing.title }}</h1><p class="text-muted">{{ seller_display_name(other) }} · {{ conversation.listing.county }}</p></div><a class="btn btn-outline-success btn-sm" href="{{ url_for('marketplace.detail', listing_id=conversation.listing.id) }}">View listing</a></div>
+    <div class="chat-history border rounded bg-light p-3 mb-3" data-chat-history aria-live="polite">
+      {% for message in messages.items %}<article class="chat-message {{ 'mine' if message.sender_id == current_user.id else '' }}" data-message-id="{{ message.id }}"><div class="small text-muted">{{ 'You' if message.sender_id == current_user.id else seller_display_name(other) }} · {{ message.created_at.strftime('%d %b %H:%M') }}</div><p class="mb-0">{{ message.body }}</p></article>{% else %}<p class="text-muted text-center py-4" data-empty-chat>No messages yet. Say hello to get started.</p>{% endfor %}
+    </div>
+    {% if messages.pages > 1 %}<a class="btn btn-outline-secondary btn-sm mb-3" href="{{ url_for('chat.conversation_detail', conversation_id=conversation.id, page=messages.page - 1) }}">Earlier messages</a>{% endif %}
+    <form method="post" action="{{ url_for('chat.post_message', conversation_id=conversation.id) }}" data-message-form>
+      {{ form.hidden_tag() }}{{ form.body(class_='form-control mb-2', rows='3', maxlength='2000', placeholder='Write a message…', required=true) }}{{ form.submit(class_='btn btn-success') }}
+      <span class="small text-muted ms-2" data-chat-status>Messages are saved to this conversation.</span>
+    </form>
+  </section>
+  <aside class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-4"><div class="card-body"><h2 class="h5">Offer history</h2>
+      {% for offer in offers %}<article class="border-top py-3" data-offer-id="{{ offer.id }}"><div class="fw-semibold">{{ offer.quantity }} {{ offer.unit|lower }} · {{ offer.unit_price_minor|kes }} / {{ offer.unit|lower }}</div><div class="text-muted small">Total {{ offer.total_minor|kes }} · {{ offer.status|title }} · by {{ 'you' if offer.proposer_id == current_user.id else seller_display_name(other) }}</div>
+        {% if offer.status == 'PENDING' and offer.proposer_id != current_user.id %}<div class="d-flex gap-2 mt-2"><form method="post" action="{{ url_for('chat.offer_action', conversation_id=conversation.id, offer_id=offer.id, action='accept') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-success btn-sm">Accept</button></form><form method="post" action="{{ url_for('chat.offer_action', conversation_id=conversation.id, offer_id=offer.id, action='reject') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-secondary btn-sm">Reject</button></form></div>
+        <form class="mt-2" method="post" action="{{ url_for('chat.offer_action', conversation_id=conversation.id, offer_id=offer.id, action='counter') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="input-group input-group-sm"><input class="form-control" name="quantity" aria-label="Counter quantity" placeholder="Quantity" required><input class="form-control" name="unit_price" aria-label="Counter unit price in KES" placeholder="KES/unit" required><button class="btn btn-outline-success">Counter</button></div></form>
+        {% elif offer.status == 'PENDING' %}<form class="mt-2" method="post" action="{{ url_for('chat.offer_action', conversation_id=conversation.id, offer_id=offer.id, action='cancel') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-secondary btn-sm">Cancel offer</button></form>{% endif %}</article>
+      {% else %}<p class="text-muted">No offers yet.</p>{% endfor %}
+    </div></div>
+    {% if conversation.listing.status == 'AVAILABLE' and conversation.listing.moderation_status == 'APPROVED' and conversation.listing.quantity > 0 %}<div class="card border-0 shadow-sm"><div class="card-body"><h2 class="h5">Make an offer</h2><p class="text-muted small">Offers expire after 48 hours. The seller can accept, decline, or counter.</p><form method="post" action="{{ url_for('chat.post_offer', conversation_id=conversation.id) }}">{{ offer_form.hidden_tag() }}<div class="mb-2">{{ offer_form.quantity(class_='form-control', placeholder='Whole units', required=true) }}</div><div class="mb-2">{{ offer_form.unit_price(class_='form-control', placeholder='KES per unit', required=true) }}</div>{{ offer_form.submit(class_='btn btn-outline-success w-100') }}</form></div></div>{% endif %}
+  </aside>
+</div>
+{% endblock %}

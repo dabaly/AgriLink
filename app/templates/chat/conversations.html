@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Messages · AgriLink{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4"><div><p class="small text-success fw-semibold mb-1">MARKETPLACE MESSAGES</p><h1 class="h2">Your conversations</h1></div></div>
+{% if pagination.items %}<div class="list-group shadow-sm">{% for conv in pagination.items %}{% set other = conv.listing.seller if current_user.id == conv.buyer_id else conv.buyer %}<a class="list-group-item list-group-item-action p-3" href="{{ url_for('chat.conversation_detail', conversation_id=conv.id) }}"><div class="d-flex justify-content-between"><span class="fw-semibold">{{ conv.listing.title }} · {{ seller_display_name(other) }}</span><span class="text-muted small">{{ (conv.last_message_at or conv.created_at).strftime('%d %b %Y, %H:%M') }}</span></div><span class="text-muted small">{{ conv.listing.county }} · {{ conv.listing.price_minor|kes }}</span></a>{% endfor %}</div>
+{% else %}<div class="card border-0 bg-light"><div class="card-body p-4"><h2 class="h5">No conversations yet</h2><p class="mb-0">Open a listing and choose “Message seller” to start a conversation.</p></div></div>{% endif %}
+{% if pagination.pages > 1 %}<nav class="mt-4"><ul class="pagination">{% for n in range(1, pagination.pages + 1) %}<li class="page-item {{ 'active' if n == pagination.page else '' }}"><a class="page-link" href="{{ url_for('chat.conversations', page=n) }}">{{ n }}</a></li>{% endfor %}</ul></nav>{% endif %}
+{% endblock %}
