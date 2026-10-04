@@ -117,6 +117,19 @@ class OrderService:
             OrderStatusHistory(previous_status=None, status="CONFIRMED", actor_id=actor.id)
         )
         db.session.add(order)
+        db.session.flush()
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        for user_id in {order.buyer_id, order.seller_id}:
+            NotificationService.create_notification(
+                user_id,
+                NotificationType.ORDER_CONFIRMED,
+                "Order confirmed",
+                f"Order #{order.id} for {listing.title} is confirmed.",
+                target_type="order",
+                target_id=order.id,
+            )
         return order
 
     @staticmethod
@@ -372,6 +385,46 @@ class OrderService:
                 created_at=now,
             )
         )
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        title_by_status = {
+            "CANCELLED": "Order cancelled",
+            "PROCESSING": "Order being prepared",
+            "READY_FOR_PICKUP": "Order ready for pickup",
+            "IN_TRANSIT": "Order in transit",
+            "DELIVERED": "Order delivered",
+            "COMPLETED": "Order completed",
+        }
+        type_by_status = {
+            "CANCELLED": NotificationType.ORDER_CANCELLED,
+            "PROCESSING": NotificationType.ORDER_PROCESSING,
+            "READY_FOR_PICKUP": NotificationType.ORDER_READY_FOR_PICKUP,
+            "IN_TRANSIT": NotificationType.ORDER_IN_TRANSIT,
+            "DELIVERED": NotificationType.ORDER_DELIVERED,
+            "COMPLETED": NotificationType.ORDER_COMPLETED,
+        }
+        notify_users: set[int] = set()
+        if new_status == "CANCELLED":
+            if actor is None:
+                notify_users.update({order.buyer_id, order.seller_id})
+            else:
+                notify_users.add(order.seller_id if actor.id == order.buyer_id else order.buyer_id)
+        elif new_status in {"PROCESSING", "READY_FOR_PICKUP", "IN_TRANSIT", "DELIVERED"}:
+            notify_users.add(order.buyer_id)
+        elif new_status == "COMPLETED":
+            notify_users.update(
+                {order.buyer_id, order.seller_id} - ({actor.id} if actor else set())
+            )
+        for user_id in notify_users:
+            NotificationService.create_notification(
+                user_id,
+                type_by_status[new_status],
+                title_by_status[new_status],
+                f"Order #{order.id} is now {new_status.replace('_', ' ').lower()}.",
+                target_type="order",
+                target_id=order.id,
+            )
         if commit:
             try:
                 db.session.commit()

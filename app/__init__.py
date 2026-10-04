@@ -8,6 +8,7 @@ from logging.config import dictConfig
 from pathlib import Path
 
 from flask import Flask, render_template
+from flask_login import current_user
 
 from app.config import config_by_name
 from app.extensions import csrf, limiter, login_manager, migrate, socketio
@@ -71,6 +72,7 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
     app.register_blueprint(marketplace_bp)
     from app.chat import chat_bp
     from app.disputes import disputes_bp
+    from app.notifications import notifications_bp
     from app.orders.routes import orders_bp
     from app.payments.routes import payments_bp
     from app.reviews import reviews_bp
@@ -80,11 +82,19 @@ def create_app(config_name: str | None = None, *, test_config: dict | None = Non
     app.register_blueprint(payments_bp)
     app.register_blueprint(reviews_bp)
     app.register_blueprint(disputes_bp)
+    app.register_blueprint(notifications_bp)
     from app.utils.datetime import format_nairobi_datetime
 
     app.add_template_filter(format_kes, "kes")
     app.add_template_filter(format_nairobi_datetime, "nairobi")
     app.add_template_global(_seller_name, "seller_display_name")
+
+    @app.context_processor
+    def notification_template_context():
+        from app.notifications.services import NotificationService
+
+        return {"notification_unread_count": NotificationService.unread_count(current_user)}
+
     app.extensions["agri_link.otp_provider"] = get_otp_provider(app)
 
     @app.get("/")

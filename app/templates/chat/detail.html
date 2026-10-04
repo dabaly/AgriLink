@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block title %}{{ conversation.listing.title }} · Messages{% endblock %}
-{% block page_scripts %}<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.3/dist/socket.io.min.js" defer></script>{% endblock %}
 {% block content %}
 {% set other = conversation.listing.seller if current_user.id == conversation.buyer_id else conversation.buyer %}
 <div class="row g-4" data-chat data-conversation-id="{{ conversation.id }}">

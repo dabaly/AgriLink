@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import Conflict, NotFound
 
 from app.extensions import db
-from app.models import Order, Payment, PaymentEvent, User
+from app.models import Dispute, Order, Payment, PaymentEvent, User
 from app.models.payment import PaymentStatus
 from app.orders.services import OrderService
 from app.payments.providers import (
@@ -252,9 +252,22 @@ class PaymentService:
             record.result_message = "Payment remains pending."
         elif event.status in {"FAILED", "EXPIRED"}:
             if event.event_type.startswith("refund"):
+                refund_was_pending = payment.refund_pending
                 payment.refund_pending = False
                 record.processing_status = "PROCESSED"
                 record.result_message = "Refund failed; payment remains successful."
+                if refund_was_pending:
+                    from app.models import NotificationType
+                    from app.notifications.services import NotificationService
+
+                    NotificationService.create_notification(
+                        order.buyer_id,
+                        NotificationType.REFUND_FAILED,
+                        "Refund could not be completed",
+                        f"The refund for order #{order.id} was not confirmed by the provider.",
+                        target_type="order",
+                        target_id=order.id,
+                    )
                 from app.disputes.services import DisputeService
 
                 DisputeService._refund_failed(order.id, event.failure_code)
@@ -262,10 +275,26 @@ class PaymentService:
                 PaymentStatus.SUCCEEDED.value,
                 PaymentStatus.REFUNDED.value,
             }:
+                first_failure = payment.status not in {
+                    PaymentStatus.FAILED.value,
+                    PaymentStatus.EXPIRED.value,
+                }
                 payment.status = event.status
                 payment.failure_code = (event.failure_code or event.status)[:80]
                 record.processing_status = "PROCESSED"
                 record.result_message = f"Payment {event.status.lower()}."
+                if first_failure:
+                    from app.models import NotificationType
+                    from app.notifications.services import NotificationService
+
+                    NotificationService.create_notification(
+                        order.buyer_id,
+                        NotificationType.PAYMENT_FAILED,
+                        "Payment was not completed",
+                        f"Payment for order #{order.id} did not go through. You can try again.",
+                        target_type="order",
+                        target_id=order.id,
+                    )
         elif event.status == "SUCCEEDED":
             if payment.status in {PaymentStatus.SUCCEEDED.value, PaymentStatus.REFUNDED.value}:
                 record.processing_status = "PROCESSED"
@@ -274,6 +303,18 @@ class PaymentService:
                 payment.status = PaymentStatus.SUCCEEDED.value
                 payment.completed_at = datetime.now(UTC)
                 OrderService._mark_paid_after_trusted_payment(order.id)
+                from app.models import NotificationType
+                from app.notifications.services import NotificationService
+
+                for user_id in {order.buyer_id, order.seller_id}:
+                    NotificationService.create_notification(
+                        user_id,
+                        NotificationType.PAYMENT_SUCCEEDED,
+                        "Payment successful",
+                        f"Payment for order #{order.id} was confirmed.",
+                        target_type="order",
+                        target_id=order.id,
+                    )
                 record.processing_status = "PROCESSED"
                 record.result_message = "Payment confirmed and order marked paid."
             else:
@@ -296,6 +337,28 @@ class PaymentService:
                     from app.disputes.services import DisputeService
 
                     DisputeService._finalize_buyer_resolution(order.id)
+                from app.models import NotificationType
+                from app.notifications.services import NotificationService
+
+                NotificationService.create_notification(
+                    order.buyer_id,
+                    NotificationType.REFUND_SUCCEEDED,
+                    "Refund confirmed",
+                    f"A refund for order #{order.id} was confirmed.",
+                    target_type="order",
+                    target_id=order.id,
+                )
+                dispute = db.session.scalar(select(Dispute).where(Dispute.order_id == order.id))
+                if dispute is not None and dispute.status == "RESOLVED_FOR_BUYER":
+                    for user_id in {order.buyer_id, order.seller_id}:
+                        NotificationService.create_notification(
+                            user_id,
+                            NotificationType.DISPUTE_RESOLVED_FOR_BUYER,
+                            "Dispute resolved for buyer",
+                            f"The dispute for order #{order.id} was resolved for the buyer.",
+                            target_type="order",
+                            target_id=order.id,
+                        )
                 record.processing_status = "PROCESSED"
                 record.result_message = "Refund confirmed."
             else:

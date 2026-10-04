@@ -172,6 +172,18 @@ def send_message(actor: User, conversation_id: int, body: str) -> Message:
         conv.last_message_at = now
         conv.updated_at = now
         db.session.add(message)
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        recipient_id = conv.listing.seller_id if actor.id == conv.buyer_id else conv.buyer_id
+        NotificationService.create_notification(
+            recipient_id,
+            NotificationType.MESSAGE_RECEIVED,
+            "New message",
+            f"You received a new message about {conv.listing.title}.",
+            target_type="conversation",
+            target_id=conv.id,
+        )
         db.session.commit()
         return message
     finally:
@@ -278,6 +290,29 @@ def create_offer(
         expires_at=_now() + OFFER_TTL,
     )
     db.session.add(offer)
+    from app.models import NotificationType
+    from app.notifications.services import NotificationService
+
+    recipient_id = (
+        parent.proposer_id
+        if parent_offer_id is not None
+        else conv.listing.seller_id
+        if actor.id == conv.buyer_id
+        else conv.buyer_id
+    )
+    notification_type = (
+        NotificationType.OFFER_COUNTERED
+        if parent_offer_id is not None
+        else NotificationType.OFFER_RECEIVED
+    )
+    NotificationService.create_notification(
+        recipient_id,
+        notification_type,
+        "Offer countered" if parent_offer_id is not None else "New offer received",
+        f"A new offer was made for {conv.listing.title}.",
+        target_type="conversation",
+        target_id=conv.id,
+    )
     try:
         db.session.commit()
     except IntegrityError as exc:
@@ -331,6 +366,17 @@ def transition_offer(
         raise NotFound()
     if action == "reject":
         offer.status = "REJECTED"
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        NotificationService.create_notification(
+            offer.proposer_id,
+            NotificationType.OFFER_REJECTED,
+            "Offer rejected",
+            f"Your offer for {conv.listing.title} was rejected.",
+            target_type="conversation",
+            target_id=conv.id,
+        )
         db.session.commit()
         return offer, None
     if action == "counter":
@@ -365,6 +411,17 @@ def transition_offer(
     except Exception:
         db.session.rollback()
         raise
+    from app.models import NotificationType
+    from app.notifications.services import NotificationService
+
+    NotificationService.create_notification(
+        offer.proposer_id,
+        NotificationType.OFFER_ACCEPTED,
+        "Offer accepted",
+        f"Your offer for {listing.title} was accepted.",
+        target_type="order",
+        target_id=order.id,
+    )
     db.session.execute(
         update(Offer)
         .where(Offer.conversation_id == conv.id, Offer.id != offer.id, Offer.status == "PENDING")

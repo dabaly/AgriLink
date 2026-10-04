@@ -28,9 +28,17 @@ def _can_chat() -> bool:
     )
 
 
+def _can_use_socket() -> bool:
+    return bool(
+        current_user.is_authenticated
+        and current_user.phone_verified_at
+        and current_user.role in ("BUYER", "FARMER", "ADMIN")
+    )
+
+
 @socketio.on("connect")
 def socket_connect(auth=None):
-    if not _can_chat():
+    if not _can_use_socket():
         return False
     join_room(f"user:{current_user.id}")
     return True

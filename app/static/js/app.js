@@ -11,6 +11,22 @@ window.agriLinkFetch = function (url, options = {}) {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  const badge = document.querySelector("[data-notification-count]");
+  if (!badge || !window.io) return;
+  const socket = window.agriLinkSocket || window.io();
+  window.agriLinkSocket = socket;
+  const received = new Set();
+  socket.on("notification:new", (notification) => {
+    if (!notification || received.has(notification.event_id)) return;
+    received.add(notification.event_id);
+    const count = Number(badge.dataset.notificationCount || 0) + 1;
+    badge.dataset.notificationCount = String(count);
+    badge.textContent = String(count);
+    badge.classList.remove("d-none");
+  });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
   const root = document.querySelector("[data-chat]");
   if (!root) return;
   const history = root.querySelector("[data-chat-history]");
@@ -36,7 +52,8 @@ document.addEventListener("DOMContentLoaded", () => {
     history.scrollTop = history.scrollHeight;
   };
   if (window.io) {
-    const socket = window.io();
+    const socket = window.agriLinkSocket || window.io();
+    window.agriLinkSocket = socket;
     socket.on("connect", () => {
       socket.emit("conversation:join", { conversation_id: conversationId });
       socket.emit("conversation:read", { conversation_id: conversationId, csrf_token: csrf });

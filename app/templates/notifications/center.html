@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Notifications · AgriLink{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between gap-3 mb-4">
+  <div><p class="small text-success fw-semibold mb-1">YOUR ACTIVITY</p><h1 class="h2 mb-0">Notifications</h1></div>
+  {% if pagination.items %}<form method="post" action="{{ url_for('notifications.read_all') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-success btn-sm">Mark all as read</button></form>{% endif %}
+</div>
+{% if pagination.items %}
+  <div class="list-group shadow-sm">
+  {% for notification in pagination.items %}
+    <article class="list-group-item p-3 {% if not notification.is_read %}border-start border-4 border-success bg-success-subtle{% endif %}">
+      <div class="d-flex justify-content-between align-items-start gap-3">
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-center gap-2"><h2 class="h6 mb-0">{{ notification.title }}</h2>{% if not notification.is_read %}<span class="badge text-bg-success">New</span>{% endif %}</div>
+          <p class="mb-1 mt-2" style="white-space: pre-line">{{ notification.body }}</p>
+          <time class="small text-muted" datetime="{{ notification.created_at.isoformat() }}">{{ notification.created_at|nairobi }}</time>
+        </div>
+        <div class="d-flex flex-column align-items-end gap-2">
+          {% if notification.target_type %}<a class="btn btn-sm btn-success" href="{{ url_for('notifications.open_target', notification_id=notification.id) }}">View</a>{% endif %}
+          {% if not notification.is_read %}<form method="post" action="{{ url_for('notifications.read_one', notification_id=notification.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-secondary">Mark read</button></form>{% endif %}
+        </div>
+      </div>
+    </article>
+  {% endfor %}
+  </div>
+  {% if pagination.pages > 1 %}<nav aria-label="Notification pages" class="mt-4"><ul class="pagination">
+    {% if pagination.has_prev %}<li class="page-item"><a class="page-link" href="{{ url_for('notifications.center', page=pagination.prev_num) }}">Previous</a></li>{% endif %}
+    <li class="page-item disabled"><span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span></li>
+    {% if pagination.has_next %}<li class="page-item"><a class="page-link" href="{{ url_for('notifications.center', page=pagination.next_num) }}">Next</a></li>{% endif %}
+  </ul></nav>{% endif %}
+{% else %}<div class="card border-0 shadow-sm"><div class="card-body p-4 text-muted">You’re all caught up. New activity will appear here.</div></div>{% endif %}
+{% endblock %}

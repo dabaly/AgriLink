@@ -99,6 +99,18 @@ def create_dispute(actor: User, order_id: int, reason, description: str) -> Disp
                 note="Dispute opened.",
             )
         )
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        other_user_id = order.seller_id if actor.id == order.buyer_id else order.buyer_id
+        NotificationService.create_notification(
+            other_user_id,
+            NotificationType.DISPUTE_OPENED,
+            "Dispute opened",
+            f"A dispute was opened for order #{order.id}.",
+            target_type="order",
+            target_id=order.id,
+        )
         db.session.commit()
         return dispute
     except IntegrityError as exc:
@@ -204,6 +216,19 @@ def admin_transition(actor: User, dispute_id: int, action: str, note: str = "") 
                 note=clean_note or None,
             )
         )
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        order = dispute.order
+        for user_id in {order.buyer_id, order.seller_id}:
+            NotificationService.create_notification(
+                user_id,
+                NotificationType.DISPUTE_UNDER_REVIEW,
+                "Dispute under review",
+                f"The dispute for order #{order.id} is now under review.",
+                target_type="order",
+                target_id=order.id,
+            )
     elif action == "resolve_for_seller":
         if dispute.status != DisputeStatus.UNDER_REVIEW.value:
             raise Conflict("Move the dispute under review before resolving it.")
@@ -237,6 +262,19 @@ def admin_transition(actor: User, dispute_id: int, action: str, note: str = "") 
                 note=clean_note,
             )
         )
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        order = dispute.order
+        for user_id in {order.buyer_id, order.seller_id}:
+            NotificationService.create_notification(
+                user_id,
+                NotificationType.DISPUTE_RESOLVED_FOR_SELLER,
+                "Dispute resolved for seller",
+                f"The dispute for order #{order.id} was resolved for the seller.",
+                target_type="order",
+                target_id=order.id,
+            )
     elif action == "resolve_for_buyer":
         if dispute.status != DisputeStatus.UNDER_REVIEW.value:
             raise Conflict("Move the dispute under review before resolving it.")

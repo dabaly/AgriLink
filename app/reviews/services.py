@@ -80,6 +80,17 @@ def create_review(actor: User, order_id: int, rating, body: str) -> Review:
         if profile is not None:
             profile.rating_avg = float(average)
             profile.rating_count = count
+        from app.models import NotificationType
+        from app.notifications.services import NotificationService
+
+        NotificationService.create_notification(
+            order.seller_id,
+            NotificationType.REVIEW_RECEIVED,
+            "New review",
+            f"You received a new review for {order.item.title_snapshot}.",
+            target_type="listing",
+            target_id=order.listing_id,
+        )
         db.session.commit()
         return review
     except IntegrityError as exc:

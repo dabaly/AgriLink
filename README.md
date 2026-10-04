@@ -122,4 +122,10 @@ Verified buyers or farmers who own an order may open one dispute while it is `PA
 
 After a confirmed buyer refund, the order becomes `CANCELLED`. Reserved listing quantity is returned only when the order has not physically left the seller, following the existing order inventory rule. No quantity is restored after handoff. Dispute state/history, order state/history, and payment state remain within their respective services; public pages expose neither private buyer contact data nor payment/provider information.
 
-Feedback routes include `POST /orders/<order_id>/reviews`, participant dispute views under `/disputes/<id>`, and the minimal admin queue at `/admin/disputes` with CSRF-protected resolution actions. No notification system or broader admin dashboard is part of this batch.
+Feedback routes include `POST /orders/<order_id>/reviews`, participant dispute views under `/my/disputes/<id>`, and the minimal admin queue at `/admin/disputes` with CSRF-protected resolution actions. No broader admin dashboard is part of Batch 7.
+
+## Notifications (Batch 8)
+
+In-app notifications are persisted in SQLite and scoped to their recipient. `NotificationService` owns creation, listing, unread counts, and read-state changes. Chat, offer, order, payment, review, and dispute services stage concise, server-authored notifications inside their existing successful transactions; no notification is created for an untrusted payment result or a merely pending refund. Notification targets store only a constrained type and record ID, and the application maps those pairs to existing internal pages after checking recipient access.
+
+The authenticated `/notifications` page shows newest-first, bounded pages and supports CSRF-protected mark-read and mark-all-read actions. The navigation unread count comes from `NotificationService`. After a transaction commits, an in-process SQLAlchemy commit hook emits `notification:new` to the recipient's authenticated `user:<id>` Socket.IO room. If socket delivery fails, the persisted notification remains available in the center. No external delivery provider, background worker, notification preference UI, or retention job is used.

@@ -7,6 +7,7 @@
   <title>{% block title %}AgriLink{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {% if current_user.is_authenticated and current_user.phone_verified_at %}<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.3/dist/socket.io.min.js" defer></script>{% endif %}
   <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
   {% block page_scripts %}{% endblock %}
 </head>
@@ -16,6 +17,7 @@
       <div class="d-flex gap-3 align-items-center">
         <a href="{{ url_for('marketplace.browse') }}">Marketplace</a>
         {% if current_user.is_authenticated %}
+          {% if current_user.phone_verified_at %}<a href="{{ url_for('notifications.center') }}">Notifications <span class="badge text-bg-success{% if not notification_unread_count %} d-none{% endif %}" data-notification-count="{{ notification_unread_count }}">{{ notification_unread_count }}</span></a>{% endif %}
           {% if current_user.role in ('BUYER', 'FARMER') and current_user.phone_verified_at %}<a href="{{ url_for('chat.conversations') }}">Messages{% if unread_total|default(0) %} <span class="badge text-bg-success">{{ unread_total }}</span>{% endif %}</a>{% endif %}
           {% if current_user.role == 'BUYER' and current_user.phone_verified_at %}<a href="{{ url_for('orders.buyer_orders') }}">My orders</a>{% elif current_user.role == 'FARMER' and current_user.phone_verified_at %}<a href="{{ url_for('orders.seller_orders') }}">Sales</a>{% endif %}
           {% if current_user.role == 'ADMIN' and current_user.phone_verified_at %}<a href="{{ url_for('disputes.admin_list') }}">Disputes</a>{% endif %}
