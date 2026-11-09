@@ -2,6 +2,8 @@
 
 AgriLink is a mobile-responsive agricultural marketplace connecting farmers and buyers. The Flask application includes phone-verified accounts and a farmer marketplace for browsing and publishing listings.
 
+For the full project lifecycle, architecture, contributor workflow, verification, deployment, and operations guide, see [the SDLC documentation](docs/SDLC.md).
+
 ## Requirements
 
 - Python 3.14 or newer
